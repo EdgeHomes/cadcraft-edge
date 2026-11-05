@@ -50,6 +50,8 @@ Example client configuration (Claude Code / Claude Desktop):
 | `render {width?, height?, fit?, window?, background?, plot_style?}` | A PNG image of the drawing, or of just the area `window` `[[x0,y0],[x1,y1]]` (one sheet or room of a large drawing; 1600 px wide with the window's shape unless sized). `background`: `"dark"` (the canvas; the default without a plot style), `"white"` (the default with one, as a plot prints on paper), `"paper"` or `"#rrggbb"`; colour 7 is drawn white on a dark background and black on a light one, as on a plot. `plot_style`: a plot style table, e.g. `monochrome.ctb` (every colour black) or `grayscale.ctb`; `"none"` (or `""`) draws every object with its own properties, also in a layout that shows its own plot styles (without `plot_style` such a layout draws with its table, as on screen). An unknown value is refused. The result is an image content block (`content[0].type` is `"image"`), not text. |
 | `find_text {contains?, layer?, window?, limit?, offset?}` | The readable texts — TEXT, MTEXT without formatting codes, block attributes, multileaders — with text, insertion point, height, rotation, style, layer and handle; filtered by content (any case), layer and a window around the insertion points. Read-only (the `texts` command). |
 | `new_drawing {metric?}`, `open {path}`, `save {path?}`, `cancel` | Files and Escape. `save` to a `.svg`, `.png` or `.pdf` path exports: the drawing keeps its name and unsaved changes. |
+| `drawing_create {path, units?, style?, scale?, version?, layers?, blocks?, entities}` | A new, editable drawing in one call, built only from CADCraft commands: layers (name, colour, linetype, lineweight), blocks and inserts, lines, polylines, rectangles, circles, arcs, text, mtext, dimensions (linear, aligned, radius, diameter) and hatches. Text, dimensions and hatch spacing follow a plot scale chosen to fit an A3 sheet (2.5 mm text; `scale` overrides). Validated and capped first (5000 entities, 100 blocks nested at most 8 deep, 256 layers, 4096 points per entity, 4000 characters per text and 200,000 in all, coordinates finite within ±1e9, 32 MiB output); invalid input writes nothing, and an entity the engine refuses is reported in `dropped`. Saved atomically under an unused name; returns a JSON summary and the file as an embedded resource. |
+| `file_attach {path}` | A file a tool wrote, as a download: `{"type":"resource","resource":{"uri":"file:///<percent-encoded name>","mimeType":…,"blob":<base64>}}`. Regular files only, up to 32 MiB (the read itself is bounded): dwg (`application/acad`), dxf (`application/dxf`), pdf, svg, png, jpeg, csv, txt, docx, xlsx, pptx. |
 | `screenshot`, `ui_inspect`, `ui_click {x, y}` | Only when connected to the app. |
 
 Resources: `cadcraft://drawing` (inspect JSON) and `cadcraft://commands` (catalog).
@@ -58,6 +60,44 @@ Arguments are checked against each tool's input schema. An unknown tool, `argume
 object, a missing required argument or one of the wrong type is a JSON-RPC error `-32602` (invalid
 params), so `command_line {}` never presses Enter by accident. A tool that runs and fails (a bad
 point, an unknown command) returns a result with `isError: true` and the message.
+
+## Chat deployments: `--root`, `--compact` and `tools`
+
+```sh
+cadcraft-cli mcp --compact --root /app/uploads/cadcraft   # LibreChat (npm: cadcraft-edge-mcp)
+cadcraft-cli mcp --create-root --root ~/Documents/CADCraft   # Claude Desktop (packaging/mcpb)
+cadcraft-cli tools [--compact] [--json]   # the tool list and instructions, for checking a deployment
+```
+
+- `--root DIR` (or `--root=DIR`) confines every file any tool reads or writes to `DIR`, which must
+  exist (`--create-root` makes it; it must then be absolute). Relative paths are inside it;
+  absolute paths inside it are accepted; `..` and links that lead out are refused, and so are
+  Windows device names. It covers every path: the file tools, `execute` and `command_line`
+  (OPEN, SAVEAS, WBLOCK, INSERT from a file, IMPORT, XATTACH, IMAGEATTACH, SCRIPT, plot and export,
+  table and data-extraction exports, plot style and linetype files, LISP `open`), xrefs and images
+  a drawing refers to, and `tool_call`. The engine's file gateways (`crates/engine/src/file_access.rs`)
+  enforce it for the whole process, and a test keeps commands from touching the file system any
+  other way. The settings folder (plotter configurations) is turned off. `--root` can't be combined
+  with `--connect`: a running app's files can't be confined.
+- Under `--root` nothing is replaced: every write stages the bytes beside the target and publishes
+  them with a hard link, which fails if the name is taken (the folder's file system must support
+  hard links). `save` without a path writes an unused name beside the opened drawing
+  (`plan (2).dxf`); no `.bak` is written.
+- `--compact` lists 12 core tools (`drawing_create`, `file_attach`, `open`, `save`,
+  `inspect_drawing`, `query_entities`, `find_text`, `command_line`, `script`, `execute`,
+  `list_commands`, `render`) plus `tool_search` and `tool_call`. `tool_call` returns exactly what
+  the direct tool returns, embedded files included, and refuses to run the meta tools. There is no
+  directory-listing tool.
+
+The server instructions tell the model to use `drawing_create` for new drawings and to open an
+attached upload's exact absolute path, edit it, save under a new name and `file_attach` the result,
+never writing code to handle drawings. `open` reports `warnings` (what reading left out).
+
+**Formats.** DXF is CADCraft's native format and the recommended output; DWG is written through a
+DXF-to-DWG conversion (`docs/file-format-parity.md`), so it keeps what DXF keeps, minus the bridge's
+gaps. Neither round trip is lossless for content CADCraft doesn't model (proxy objects, some
+3D/ACIS data, unknown XDATA in DWG); `open` lists what was left out. **MIME types:** IANA's
+`image/vnd.dwg` and `image/vnd.dxf` are avoided because chat clients show `image/*` as pictures.
 
 ## A typical session
 

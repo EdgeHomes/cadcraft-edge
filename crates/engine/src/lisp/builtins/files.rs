@@ -100,7 +100,7 @@ fn can_write(_path: &str) -> bool {
 #[cfg(not(target_arch = "wasm32"))]
 fn write_text_file(path: &str, text: &str, append: bool) {
     use std::io::Write;
-    let f = std::fs::OpenOptions::new().create(true).write(true).append(append).truncate(!append).open(path);
+    let f = crate::file_access::open_write(std::path::Path::new(path), append);
     if let Ok(mut f) = f {
         let _ = f.write_all(text.as_bytes());
     }

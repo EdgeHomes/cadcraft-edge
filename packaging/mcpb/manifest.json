@@ -1,0 +1,118 @@
+{
+  "manifest_version": "0.3",
+  "name": "cadcraft",
+  "display_name": "CADCraft",
+  "version": "0.17.0",
+  "description": "Make and edit CAD drawings (DXF, DWG) with CADCraft, an open-source CAD engine, in a folder you choose.",
+  "long_description": "CADCraft makes new drawings from a description (layers, lines, polylines, circles, arcs, text, dimensions, hatches, blocks) and opens, inspects, edits, renders and saves DXF and DWG drawings with AutoCAD-style commands. Every file it reads or writes stays inside the working folder you choose, and it never replaces a file there: edits are saved under new names.",
+  "author": {
+    "name": "CADCraft contributors",
+    "url": "https://github.com/storytold/cadcraft"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mbarker-edgehomes/cadcraft-edge"
+  },
+  "homepage": "https://github.com/storytold/cadcraft",
+  "license": "MIT OR Apache-2.0",
+  "icon": "icon.png",
+  "keywords": [
+    "cad",
+    "dxf",
+    "dwg",
+    "drafting",
+    "drawing"
+  ],
+  "server": {
+    "type": "binary",
+    "entry_point": "server/cadcraft-cli",
+    "mcp_config": {
+      "command": "${__dirname}/server/cadcraft-cli",
+      "args": [
+        "mcp",
+        "--create-root",
+        "--root",
+        "${user_config.working_folder}"
+      ],
+      "env": {},
+      "platform_overrides": {
+        "win32": {
+          "command": "${__dirname}/server/cadcraft-cli.exe"
+        }
+      }
+    }
+  },
+  "user_config": {
+    "working_folder": {
+      "type": "directory",
+      "title": "Working folder",
+      "description": "The folder CADCraft reads drawings from and saves them to. It can't reach files outside it, and it never replaces a file there. Made on first use if it doesn't exist.",
+      "required": true,
+      "default": "${DOCUMENTS}/CADCraft"
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "darwin",
+      "win32"
+    ]
+  },
+  "tools": [
+    {
+      "name": "command_line",
+      "description": "Type one line at the CADCraft command line, exactly as a user would at an AutoCAD-style prompt. Starts commands by name or alias (LINE, L, CIRCLE, C, PLINE, RECTANG, MOVE, TRIM, OFFSET, ZOOM…) and answers the active prompt: points `x,y`, relative `@dx,dy`, polar `@dist<angle`, distances, keywords (e.g. `c` for Close), empty text = Enter. Spaces act as Enter, so `circle 0,0 5` works in one call. Returns the new prompt and command-line output, and `error` when the line was refused."
+    },
+    {
+      "name": "script",
+      "description": "Run a multi-line script (like an AutoCAD .scr file): one or more inputs per line, blank line = Enter."
+    },
+    {
+      "name": "execute",
+      "description": "Run any command with JSON parameters (no prompts or dialogs). Use list_commands to find ids and parameter docs. Examples: line {points:[[0,0],[10,0]]}, circle {center:[0,0], radius:5}, layer.new {name:\"Walls\", color:\"red\", current:true}, move {handles:[\"10A\"], delta:[5,0]}, zoom {mode:\"extents\"}."
+    },
+    {
+      "name": "list_commands",
+      "description": "List commands with ids, labels, menu paths, aliases and parameter docs. Optional filter: a substring of the command id, label or an alias."
+    },
+    {
+      "name": "inspect_drawing",
+      "description": "Summary of the active drawing: entity counts, extents, layers, styles, blocks, layouts, selection, undo history and (optionally) entities with handles and geometry."
+    },
+    {
+      "name": "query_entities",
+      "description": "Entities filtered by type (Line, Circle, Polyline…), layer, current selection (selected:true; active space only) and/or a window [[x0,y0],[x1,y1]] (objects whose geometry is inside or crosses it; crossing:false = entirely inside). Returns count (all matches), returned (this page) and entities; page with offset and limit (default 500)."
+    },
+    {
+      "name": "render",
+      "description": "Render the active drawing to a PNG and return it as an image content block (content[0].type is \"image\", not text): fitted to the extents by default, or just the area `window` [[x0,y0],[x1,y1]] (drawing units), e.g. one sheet or one room of a large drawing. With a window and no size the image is 1600 px wide with the window's shape. `background`: \"dark\" (the canvas; the default without a plot style), \"white\" (the default with one, as a plot prints on paper), \"paper\" or \"#rrggbb\"; colour 7 is drawn white on a dark background and black on a light one, as on a plot. `plot_style`: a plot style table, e.g. \"monochrome.ctb\" (every colour black, as most plots) or \"grayscale.ctb\", which make light colours readable on white; \"none\" (or \"\") draws every object with its own properties, also in a layout that shows its own plot styles (without `plot_style` such a layout draws with its table, as on screen). An unknown background or plot style is refused."
+    },
+    {
+      "name": "find_text",
+      "description": "Read the drawing's texts: TEXT, MTEXT (formatting removed), block attributes and multileaders, each with its text, insertion point `at`, height, rotation, style, layer and handle. Filter by `contains` (any case), `layer` and/or `window` [[x0,y0],[x1,y1]] around the insertion points; page with offset and limit (default 200). Use it to find room names, sheet titles and notes without reading all the geometry."
+    },
+    {
+      "name": "new_drawing",
+      "description": "Create a new drawing (imperial by default, or metric)."
+    },
+    {
+      "name": "open",
+      "description": "Open a DXF or DWG drawing with CADCraft. When the user attaches a drawing, its absolute path is provided in context: open that exact path, inspect and edit what was asked, save under a new name, then call file_attach so the user can download it. Never write Python or other code to create, read or edit a drawing. The reply lists `warnings`: what reading left out; tell the user about them."
+    },
+    {
+      "name": "save",
+      "description": "Save the drawing (DXF or DWG by extension). A .svg, .png or .pdf path exports instead: the drawing keeps its name and unsaved changes. In a working folder (--root) an existing file is never replaced: save under a new name, and a save without a path writes an unused name beside the opened drawing (`plan (2).dxf`). Then call file_attach with the saved path."
+    },
+    {
+      "name": "drawing_create",
+      "description": "Make a new, editable CAD drawing (.dxf recommended, or .dwg) in one call from structured JSON, and attach it for download. Give units, layers (name, color, linetype, lineweight), optional blocks, and entities: line, polyline, rectangle, circle, arc, text, mtext, dimension (linear, aligned, radius, diameter), hatch (a closed boundary and a pattern) and insert (of a block). Text and dimension sizes follow a plot scale chosen to fit an A3 sheet (or `scale`). The file gets an unused name if the path is taken. Never write Python or other code to create, read or edit a drawing. Returns a JSON summary (with anything `dropped`) and the file. To edit it later, open its path."
+    },
+    {
+      "name": "file_attach",
+      "description": "Give the user a file a tool wrote, as a download: a .dwg, .dxf, .pdf, .svg, .png, .jpeg, .csv, .txt, .docx, .xlsx or .pptx file in the working folder, up to 32 MiB. Returns a short note and the file as an embedded resource."
+    },
+    {
+      "name": "cancel",
+      "description": "Press Escape: cancel the running command (or clear the selection)."
+    }
+  ]
+}

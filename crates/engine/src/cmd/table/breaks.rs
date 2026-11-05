@@ -238,11 +238,11 @@ fn read_link(id: &str, file: &std::path::Path) -> Result<String> {
     let path = file.display();
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let meta = std::fs::metadata(file).map_err(|e| bad(id, format!("{path}: {e}")))?;
+        let meta = crate::file_access::metadata(file).map_err(|e| bad(id, format!("{path}: {e}")))?;
         if meta.len() > MAX_LINK_BYTES {
             return Err(bad(id, format!("{path}: larger than {} MB", MAX_LINK_BYTES >> 20)));
         }
-        let bytes = std::fs::read(file).map_err(|e| bad(id, format!("{path}: {e}")))?;
+        let bytes = crate::capped_read::read_capped(file, MAX_LINK_BYTES as usize).map_err(|e| bad(id, format!("{path}: {e}")))?;
         let text = String::from_utf8_lossy(&bytes);
         Ok(text.strip_prefix('\u{feff}').unwrap_or(&text).to_owned())
     }

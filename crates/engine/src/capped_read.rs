@@ -12,11 +12,13 @@ use std::fs::OpenOptions;
 use std::io::{self, Read};
 use std::path::Path;
 
-/// Read at most `max` bytes from the regular file at `path`.
+/// Read at most `max` bytes from the regular file at `path`, inside the working folder when one is
+/// in force ([`crate::file_access`]).
 ///
 /// Returns an error if the path is not a regular file, cannot be opened, or holds more than `max`
 /// bytes. At most `max + 1` bytes are ever buffered, so an endless device cannot exhaust memory.
 pub fn read_capped(path: &Path, max: usize) -> io::Result<Vec<u8>> {
+    crate::file_access::check_read(path).map_err(|e| io::Error::new(io::ErrorKind::PermissionDenied, e))?;
     let mut options = OpenOptions::new();
     options.read(true);
     #[cfg(unix)]

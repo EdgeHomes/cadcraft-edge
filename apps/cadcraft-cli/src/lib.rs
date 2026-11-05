@@ -28,7 +28,7 @@ use commands::commands;
 use convert::convert;
 use error::Result;
 use info::info;
-use mcp::mcp;
+use mcp::{mcp, tools};
 use output::Streams;
 #[cfg(test)]
 use output::{export_window, model_views, write_atomic};
@@ -102,7 +102,7 @@ where
         Command::Run(a) => a.settings.apply(),
         Command::Mcp(a) => a.settings.apply(),
         Command::Sample(a) => a.settings.apply(),
-        Command::Info(_) | Command::Commands(_) | Command::Perf(_) | Command::Roundtrip(_) => {}
+        Command::Info(_) | Command::Commands(_) | Command::Tools(_) | Command::Perf(_) | Command::Roundtrip(_) => {}
     }
     let mut io = Streams::new(out, err);
     let result = match &cli.command {
@@ -111,6 +111,7 @@ where
         Command::Run(a) => run_cmds(a, &mut io),
         Command::Commands(a) => commands(a, &mut io),
         Command::Mcp(a) => mcp(a),
+        Command::Tools(a) => tools(a, &mut io),
         Command::Perf(a) => perf(a.target.as_ref(), &mut io),
         Command::Sample(a) => sample(a, &mut io),
         Command::Roundtrip(a) => roundtrip(a, &mut io),

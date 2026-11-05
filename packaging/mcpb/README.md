@@ -1,0 +1,84 @@
+# CADCraft for Claude Desktop (MCP Bundle)
+
+`cadcraft-<version>.mcpb` is a [MCP Bundle](https://github.com/modelcontextprotocol/mcpb) that
+runs CADCraft's own MCP server (`cadcraft-cli mcp`) inside Claude Desktop on macOS and Windows.
+It offers every tool (no `--compact`): `drawing_create`, `open`, `save`, `file_attach`,
+`inspect_drawing`, `query_entities`, `find_text`, `command_line`, `script`, `execute`,
+`list_commands`, `render`, `new_drawing` and `cancel`.
+
+## Install
+
+1. Open Claude Desktop, then **Settings → Extensions** (or double-click the `.mcpb` file).
+2. Drag `cadcraft-<version>.mcpb` onto the window, or use **Advanced settings → Install
+   Extension…** and choose it.
+3. Choose the **Working folder** when asked. The default is `Documents/CADCraft` in your home
+   folder. Click **Install**, then make sure the extension is enabled.
+4. In a chat, ask for a drawing ("draw a 10 × 6 m two-room floor plan with dimensions") or attach
+   a DXF/DWG file that is in the working folder and ask for an edit.
+
+## The working folder
+
+The server is always started as `cadcraft-cli mcp --create-root --root <working folder>`.
+
+- Every file a tool reads or writes must be inside that folder (links are followed, `..` is
+  resolved, and on Windows device names such as `CON` and `NUL` are refused). Relative paths are
+  inside it. The extension never reaches the rest of the disk.
+- Nothing in it is ever replaced. A save writes a new file (`plan (2).dxf` beside `plan.dxf`), so
+  the original you gave stays as it was. Files are published with hard links, so the folder must
+  be on a file system that supports them (APFS, HFS+, NTFS and ext4 all do; FAT32/exFAT drives
+  don't).
+- If the folder doesn't exist, it's created on first start (`--create-root`). The value must be an
+  absolute path; Claude Desktop's folder picker and the `${DOCUMENTS}/CADCraft` default both give
+  one. An empty or relative value makes the server stop with an error instead of running
+  unconfined.
+- To work on a drawing from elsewhere, copy it into the working folder first.
+
+## Files in the bundle
+
+| Path | What |
+|---|---|
+| `manifest.json` | MCPB manifest 0.3: binary server, `platform_overrides` for Windows, `user_config.working_folder`, the full tool list |
+| `server/cadcraft-cli` | macOS universal binary (arm64 + x86_64) |
+| `server/cadcraft-cli.exe` | Windows x86_64 binary (also runs on Windows on Arm, emulated) |
+| `icon.png` | CADCraft's own app icon, 512 × 512 (`assets/app-icon/cadcraft-macos-512.png`) |
+| `LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE` | CADCraft's licences |
+
+No fonts are embedded: drawings render with CADCraft's own stroke font, and a font a drawing
+names that isn't on the computer is replaced in renders only (the file keeps its name).
+
+## Build
+
+```sh
+packaging/mcpb/build.sh
+```
+
+It builds the macOS binaries for both architectures and joins them with `lipo`, cross-builds the
+Windows binary with [`cargo-xwin`](https://github.com/rust-cross/cargo-xwin) (`cargo install
+--locked cargo-xwin`; it downloads Microsoft's CRT and Windows SDK headers on first use), refreshes
+`manifest.json`'s version and tools from `cadcraft-cli tools --json`, then runs `mcpb validate` and
+`mcpb pack` (`@anthropic-ai/mcpb` 2.1.2, through `npx`). The result is
+`dist/cadcraft-<version>.mcpb` (`dist/` is ignored by git).
+
+After changing a tool, run `packaging/mcpb/build.sh --manifest-only` and commit `manifest.json`:
+the test `the_mcpb_manifest_matches_the_tool_list` fails while they differ.
+
+## macOS Gatekeeper and signing
+
+The macOS binary is only ad-hoc signed (as the Rust linker signs every arm64 binary): it is not
+signed with a Developer ID or notarized, and this repository has no Developer ID signing set up
+for it (`packaging/macos/` signs the app bundle in CI from secrets). Gatekeeper blocks a program
+that carries the `com.apple.quarantine` attribute and isn't notarized. On the machine this was
+built on, the files of an extension Claude Desktop had installed carried only
+`com.apple.provenance`, not quarantine, but that was not checked for this bundle inside Claude
+Desktop (see `VERIFICATION.md`). If macOS refuses to run it ("cannot be opened because the
+developer cannot be verified"), sign and notarize before distributing:
+
+```sh
+codesign --force --options runtime --timestamp --sign "Developer ID Application: <Team>" dist/mcpb/stage/server/cadcraft-cli
+# then repack, zip the binary, and: xcrun notarytool submit <zip> --keychain-profile <profile> --wait
+```
+
+A notarized command-line binary can't be stapled; Gatekeeper checks it online on first run. Do not
+work around Gatekeeper by removing the quarantine attribute or turning off its checks. Windows
+SmartScreen may likewise warn about an unsigned `.exe`; `packaging/windows/sign.ps1` signs with an
+Authenticode certificate. See `VERIFICATION.md` for what was tested where.

@@ -25,6 +25,8 @@ pub(crate) enum CliError {
     /// The engine and io crates take file names as text.
     #[error("{}: the file name is not valid Unicode", .0.display())]
     NotUnicode(std::path::PathBuf),
+    #[error("{0}")]
+    Root(String),
     #[error("cannot connect to {addr}: {source}")]
     McpConnect { addr: String, source: std::io::Error },
 }

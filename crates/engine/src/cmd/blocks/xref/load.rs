@@ -241,7 +241,7 @@ fn case_insensitive(p: &Path) -> Option<PathBuf> {
             continue;
         }
         let want = name.to_str()?.to_lowercase();
-        let mut hits = std::fs::read_dir(if out.as_os_str().is_empty() { Path::new(".") } else { &out })
+        let mut hits = crate::file_access::read_dir(if out.as_os_str().is_empty() { Path::new(".") } else { &out })
             .ok()?
             .take(MAX_CASE_SCAN)
             .flatten()
@@ -263,7 +263,7 @@ fn read(file: &Path, cx: &mut Ctx) -> Result<Drawing, String> {
         use std::io::Read;
         let left = MAX_XREF_TOTAL_BYTES.saturating_sub(cx.bytes);
         let limit = MAX_XREF_BYTES.min(left);
-        let mut f = std::fs::File::open(file).map_err(|e| e.to_string())?;
+        let mut f = crate::file_access::open(file).map_err(|e| e.to_string())?;
         let len = f.metadata().map_err(|e| e.to_string())?.len();
         let too_big = || {
             if limit < MAX_XREF_BYTES {

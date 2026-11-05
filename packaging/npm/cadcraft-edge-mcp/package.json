@@ -1,0 +1,28 @@
+{
+  "name": "cadcraft-edge-mcp",
+  "version": "0.0.0",
+  "description": "CADCraft MCP server (stdio): create, edit and download DXF/DWG drawings from LibreChat or any MCP client",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mbarker-edgehomes/cadcraft-edge.git"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "cad",
+    "dxf",
+    "dwg",
+    "librechat"
+  ],
+  "bin": {
+    "cadcraft-edge-mcp": "bin/cadcraft-edge-mcp.js"
+  },
+  "files": [
+    "bin",
+    "LICENSE-*"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

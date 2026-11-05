@@ -79,6 +79,7 @@ pub(crate) enum Command {
     Run(RunArgs),
     Commands(CommandsArgs),
     Mcp(McpArgs),
+    Tools(ToolsArgs),
     Perf(PerfArgs),
     Sample(SampleArgs),
     Roundtrip(RoundtripArgs),
@@ -276,8 +277,31 @@ pub(crate) struct McpArgs {
     /// port first (macOS)
     #[arg(long, requires = "connect")]
     pub(crate) launch: bool,
+    /// Confine every file the tools read or write to this existing folder (the working folder):
+    /// relative paths are inside it and saving never replaces a file there. The folder's file
+    /// system must support hard links. Not with --connect, whose app can't be confined
+    #[arg(long, value_name = "DIR", conflicts_with = "connect")]
+    pub(crate) root: Option<PathBuf>,
+    /// Make the --root folder (and the folders above it) when it doesn't exist; it must then be
+    /// an absolute path (the Claude Desktop bundle's default working folder)
+    #[arg(long, requires = "root")]
+    pub(crate) create_root: bool,
+    /// Offer a short core tool list plus tool_search and tool_call, for chat clients
+    #[arg(long)]
+    pub(crate) compact: bool,
     #[command(flatten)]
     pub(crate) settings: Settings,
+}
+
+/// Print the MCP tools the server offers, for checking a deployment
+#[derive(Args)]
+pub(crate) struct ToolsArgs {
+    /// The compact list (`mcp --compact`)
+    #[arg(long)]
+    pub(crate) compact: bool,
+    /// JSON: name, version, instructions and the tool definitions
+    #[arg(long)]
+    pub(crate) json: bool,
 }
 
 /// Time the engine on a synthetic N-entity drawing (default 200000), or the canvas display-list

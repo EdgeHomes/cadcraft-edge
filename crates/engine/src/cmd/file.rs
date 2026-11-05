@@ -24,7 +24,7 @@ pub use template::{qnew_template, set_qnew_template};
 /// endless device must be rejected before it exhausts memory (CWE-400), so native opens read
 /// through [`crate::capped_read`] rather than buffering to EOF.
 #[cfg(not(target_arch = "wasm32"))]
-const MAX_DRAWING_BYTES: usize = 512 << 20;
+pub(crate) const MAX_DRAWING_BYTES: usize = 512 << 20;
 /// Largest `.scr` script accepted from a local path.
 #[cfg(not(target_arch = "wasm32"))]
 const MAX_SCRIPT_BYTES: usize = 64 << 20;
@@ -463,7 +463,11 @@ fn store(path: &str, bytes: &[u8]) -> Result<()> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         // A file in a folder still to be made has nothing to back up.
-        if is_drawing_file(path) && crate::autosave::isavebak() && crate::atomic_write::missing_folder(std::path::Path::new(path)).is_none() {
+        if is_drawing_file(path)
+            && crate::file_access::replace_allowed()
+            && crate::autosave::isavebak()
+            && crate::atomic_write::missing_folder(std::path::Path::new(path)).is_none()
+        {
             backup(std::path::Path::new(path))
                 .map_err(|e| bad("save", format!("{path}: the backup copy could not be written ({e}); nothing was saved")))?;
         }
@@ -614,7 +618,7 @@ fn backup_replaced(head: &[u8], tail: &[u8], len: u64, backup_exists: bool) -> b
 /// must not promise a backup the save won't write.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn save_keeps_current(path: &std::path::Path) -> bool {
-    let Ok(mut src) = std::fs::File::open(path) else { return false };
+    let Ok(mut src) = crate::file_access::open(path) else { return false };
     crate::autosave::isavebak() && ends(&mut src).is_ok_and(|(head, tail, len)| backup_replaced(&head, &tail, len, backup_path(path).exists()))
 }
 
@@ -629,7 +633,7 @@ pub fn save_keeps_current(_path: &std::path::Path) -> bool {
 /// ([`looks_like_drawing`]) is not backed up, and the `.bak` already there is left alone.
 #[cfg(not(target_arch = "wasm32"))]
 fn backup(path: &std::path::Path) -> std::io::Result<()> {
-    let mut src = match std::fs::File::open(path) {
+    let mut src = match crate::file_access::open(path) {
         Ok(f) if f.metadata()?.is_file() => f,
         Ok(_) => return Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
@@ -696,7 +700,15 @@ fn saved(path: &str, bytes: usize) -> Value {
 fn run_save(s: &mut Session, p: &Value) -> Result<Value> {
     let path = match str_param(p, "path") {
         Some(p) => p.to_string(),
-        None => s.state()?.path.clone().ok_or_else(|| bad("qsave", "drawing has no file name yet; use saveas {path}"))?,
+        None => {
+            let path = s.state()?.path.clone().ok_or_else(|| bad("qsave", "drawing has no file name yet; use saveas {path}"))?;
+            // In the working folder nothing is replaced: the save is a new file beside the drawing.
+            if crate::file_access::replace_allowed() {
+                path
+            } else {
+                crate::file_access::unused_name(std::path::Path::new(&path)).map_err(|e| bad("qsave", e))?.to_string_lossy().into_owned()
+            }
+        }
     };
     let n = save_to(s, &path)?;
     Ok(saved(&path, n))

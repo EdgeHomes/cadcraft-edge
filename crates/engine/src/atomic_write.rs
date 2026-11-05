@@ -30,6 +30,7 @@ const MAX_TRIES: u32 = 32;
 /// are written through the retained handle and flushed, and the temporary is then renamed over
 /// `path`. On any failure the temporary is removed and the original `path` is left untouched.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    check(path)?;
     // A symlinked destination is resolved so the link stays a link and its target is replaced.
     let resolved = resolve_symlink(path)?;
     let path = resolved.as_deref().unwrap_or(path);
@@ -56,6 +57,7 @@ pub fn missing_folder(path: &Path) -> Option<PathBuf> {
 /// mistyped folder costs less than a drawing that could not be written. The caller reports
 /// [`missing_folder`], asked before this call, so the new folder is never a surprise.
 pub fn write_atomic_making_folders(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    check(path)?;
     if let Some(folder) = missing_folder(path) {
         let dir = path.parent().unwrap_or(&folder);
         std::fs::create_dir_all(dir).map_err(|e| io::Error::new(e.kind(), format!("the folder {} could not be created: {e}", dir.display())))?;
@@ -67,6 +69,7 @@ pub fn write_atomic_making_folders(path: &Path, bytes: &[u8]) -> io::Result<()> 
 /// with `permissions` given to it from its creation (`None`: the usual creation mode). A symlink
 /// at `path` is replaced by the new file, never written through.
 pub fn write_atomic_with(path: &Path, permissions: Option<Permissions>, fill: impl FnOnce(&mut File) -> io::Result<()>) -> io::Result<()> {
+    check(path)?;
     let dir = path.parent().filter(|p| !p.as_os_str().is_empty()).map_or_else(|| PathBuf::from("."), Path::to_path_buf);
     let (mut file, tmp) = create_temp(&dir, permissions.as_ref())?;
     let write = (|| {
@@ -82,12 +85,30 @@ pub fn write_atomic_with(path: &Path, permissions: Option<Permissions>, fill: im
         return Err(e);
     }
     drop(file);
+    if !crate::file_access::replace_allowed() {
+        // In the working folder a write publishes a new file and never replaces one: a hard link
+        // fails when the name is taken, where a rename would replace the file there.
+        let linked = check(path).and_then(|()| std::fs::hard_link(&tmp, path));
+        let _ = std::fs::remove_file(&tmp);
+        return match linked {
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Err(io::Error::new(
+                e.kind(),
+                format!("{} exists; files in the working folder are never replaced, save under a new name", path.display()),
+            )),
+            other => other.map(|()| sync_dir(&dir)),
+        };
+    }
     if let Err(e) = std::fs::rename(&tmp, path) {
         let _ = std::fs::remove_file(&tmp);
         return Err(e);
     }
     sync_dir(&dir);
     Ok(())
+}
+
+/// May `path` be written ([`crate::file_access`])?
+fn check(path: &Path) -> io::Result<()> {
+    crate::file_access::check_write(path).map_err(|e| io::Error::new(io::ErrorKind::PermissionDenied, e))
 }
 
 /// Flush `dir` so a rename just made in it survives a crash or power loss (POSIX records a

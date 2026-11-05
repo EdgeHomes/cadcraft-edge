@@ -4,6 +4,10 @@ use serde_json::{Value, json};
 
 use crate::backend::Backend;
 
+const OPEN_DESCRIPTION: &str = "Open a DXF or DWG drawing with CADCraft. When the user attaches a drawing, its absolute path is provided in context: open that exact path, inspect and edit what was asked, save under a new name, then call file_attach so the user can download it. Never write Python or other code to create, read or edit a drawing. The reply lists `warnings`: what reading left out; tell the user about them.";
+
+const CREATE_DESCRIPTION: &str = "Make a new, editable CAD drawing (.dxf recommended, or .dwg) in one call from structured JSON, and attach it for download. Give units, layers (name, color, linetype, lineweight), optional blocks, and entities: line, polyline, rectangle, circle, arc, text, mtext, dimension (linear, aligned, radius, diameter), hatch (a closed boundary and a pattern) and insert (of a block). Text and dimension sizes follow a plot scale chosen to fit an A3 sheet (or `scale`). The file gets an unused name if the path is taken. Never write Python or other code to create, read or edit a drawing. Returns a JSON summary (with anything `dropped`) and the file. To edit it later, open its path.";
+
 /// The `tools/list` payload: one definition (name, description, input schema) per MCP tool,
 /// including the UI-only tools when `has_ui` says a window is available.
 pub fn tool_definitions(has_ui: bool) -> Value {
@@ -34,8 +38,11 @@ pub fn tool_definitions(has_ui: bool) -> Value {
                 "limit": {"type": "integer", "minimum": 0}, "offset": {"type": "integer", "minimum": 0}}}}),
         json!({"name": "new_drawing", "description": "Create a new drawing (imperial by default, or metric).",
             "inputSchema": {"type": "object", "properties": {"metric": {"type": "boolean"}}}}),
-        json!({"name": "open", "description": "Open a DXF or DWG file.", "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}),
-        json!({"name": "save", "description": "Save the drawing (DXF or DWG by extension). A .svg, .png or .pdf path exports instead: the drawing keeps its name and unsaved changes.", "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}}}}),
+        json!({"name": "open", "description": OPEN_DESCRIPTION, "inputSchema": {"type": "object", "properties": {"path": {"type": "string", "description": "The drawing's absolute path (an attached upload's path is given in context), or a path relative to the working folder"}}, "required": ["path"]}}),
+        json!({"name": "save", "description": "Save the drawing (DXF or DWG by extension). A .svg, .png or .pdf path exports instead: the drawing keeps its name and unsaved changes. In a working folder (--root) an existing file is never replaced: save under a new name, and a save without a path writes an unused name beside the opened drawing (`plan (2).dxf`). Then call file_attach with the saved path.", "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}}}}),
+        json!({"name": "drawing_create", "description": CREATE_DESCRIPTION, "inputSchema": crate::create::schema()}),
+        json!({"name": "file_attach", "description": "Give the user a file a tool wrote, as a download: a .dwg, .dxf, .pdf, .svg, .png, .jpeg, .csv, .txt, .docx, .xlsx or .pptx file in the working folder, up to 32 MiB. Returns a short note and the file as an embedded resource.",
+            "inputSchema": {"type": "object", "properties": {"path": {"type": "string", "description": "The file's path, absolute or relative to the working folder"}}, "required": ["path"]}}),
         json!({"name": "cancel", "description": "Press Escape: cancel the running command (or clear the selection).", "inputSchema": {"type": "object", "properties": {}}}),
     ];
     if has_ui {
@@ -132,6 +139,10 @@ pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> Result<Value,
         "inspect_drawing" => b.call("drawing.inspect", a),
         "query_entities" => b.call("engine.execute", json!({"command": "entities", "params": a})),
         "find_text" => b.call("engine.execute", json!({"command": "texts", "params": a})),
+        "drawing_create" => return Ok(crate::create::create(b, &a).unwrap_or_else(|e| err_text(&e))),
+        "file_attach" => {
+            return Ok(crate::delivery::attach(a.get("path").and_then(Value::as_str).unwrap_or_default()).unwrap_or_else(|e| err_text(&e)));
+        }
         "new_drawing" => b.call("engine.execute", json!({"command": "new", "params": a})),
         "open" => b.call("app.open", a),
         "save" => b.call("app.save", a),

@@ -4,7 +4,12 @@ use std::io::{BufRead, Write};
 
 use serde_json::{Value, json};
 
+use std::sync::Arc;
+
+use cadcraft_engine::file_access::{self, Root};
+
 use crate::backend::Backend;
+use crate::compact;
 use crate::tools::{call_tool, tool_definitions};
 
 pub const PROTOCOL_VERSION: &str = "2025-06-18";
@@ -15,7 +20,12 @@ const INVALID_REQUEST: i64 = -32600;
 const METHOD_NOT_FOUND: i64 = -32601;
 const INVALID_PARAMS: i64 = -32602;
 
-const INSTRUCTIONS: &str = "CADCraft is a 2D/3D CAD drafting app (an AutoCAD clone). Coordinates are drawing units, \
+const INSTRUCTIONS: &str = "CADCraft makes and edits CAD drawings. To make a new drawing, call drawing_create. When the user attaches \
+a drawing, its absolute path is provided in context: open that exact path with CADCraft, inspect and edit what was asked, save under \
+a new name, then call file_attach so the user can download it. Never write Python or other code to create, read or edit a drawing. \
+To give the user any file a tool wrote, call file_attach with its path. drawing_create places \
+text and dimensions exactly where you put them: render the result and move anything that overlaps. Opening reports `warnings` (what reading left out): tell the \
+user about them. CADCraft is a 2D/3D CAD drafting app (an AutoCAD clone). Coordinates are drawing units, \
 y up. Fastest path: command_line with AutoCAD syntax, e.g. `line 0,0 10,0 10,5 c`, `circle 5,2.5 1`, \
 `rectang 0,0 4,3`, `offset 1` then pick, `zoom e`. Or execute with JSON (list_commands shows ids and params). \
 Verify with inspect_drawing / query_entities and look with render.";
@@ -23,6 +33,10 @@ Verify with inspect_drawing / query_entities and look with render.";
 pub struct Server {
     backend: Box<dyn Backend>,
     initialized: bool,
+    /// `--compact`: the core tools plus `tool_search` and `tool_call`.
+    compact: bool,
+    /// `--root`: the working folder every tool call is confined to.
+    root: Option<Arc<Root>>,
 }
 
 fn response(id: Value, result: Value) -> Value {
@@ -34,7 +48,65 @@ fn error(id: Value, code: i64, message: impl Into<String>) -> Value {
 
 impl Server {
     pub fn new(backend: Box<dyn Backend>) -> Self {
-        Self { backend, initialized: false }
+        Self { backend, initialized: false, compact: false, root: None }
+    }
+    /// Offer the compact tool list ([`compact`]).
+    pub fn with_compact(mut self, compact: bool) -> Self {
+        self.compact = compact;
+        self
+    }
+    /// Confine every tool call to `root` (on the serving thread; the CLI also confines the whole
+    /// process and makes the root the working directory).
+    pub fn with_root(mut self, root: Option<Arc<Root>>) -> Self {
+        self.root = root;
+        self
+    }
+    /// The tools `tools/list` offers.
+    pub fn tools(&self) -> Vec<Value> {
+        if self.compact { compact::definitions() } else { tool_definitions(self.backend.has_ui())["tools"].as_array().cloned().unwrap_or_default() }
+    }
+    /// The `initialize` instructions.
+    pub fn instructions(&self) -> String {
+        let mut s = format!("{INSTRUCTIONS} Backend: {}.", self.backend.describe());
+        if let Some(root) = &self.root {
+            s.push_str(&format!(
+                " Files are confined to the working folder {}: relative paths are inside it, and saving never replaces a file there.",
+                root.path().display()
+            ));
+        }
+        if self.compact {
+            s.push_str(" More tools: tool_search, then tool_call.");
+        }
+        s
+    }
+    /// Run one tool, as `tools/call` does (`tool_call` included), inside the working folder.
+    pub fn call_tool(&mut self, name: &str, args: &Value) -> Result<Value, String> {
+        let backend = self.backend.as_mut();
+        let compact = self.compact;
+        let mut run = move || -> Result<Value, String> {
+            if !compact {
+                return call_tool(backend, name, args);
+            }
+            match name {
+                "tool_search" => Ok(match compact::search(args) {
+                    Ok(v) => json!({"content": [{"type": "text", "text": serde_json::to_string_pretty(&v).unwrap_or_default()}]}),
+                    Err(e) => json!({"content": [{"type": "text", "text": e}], "isError": true}),
+                }),
+                "tool_call" => {
+                    let inner = args.get("name").and_then(Value::as_str).ok_or("tool_call needs the tool `name`")?;
+                    if compact::META.contains(&inner) {
+                        return Err(format!("tool_call can't run {inner}"));
+                    }
+                    call_tool(backend, inner, args.get("arguments").unwrap_or(&Value::Null))
+                }
+                _ if compact::CORE.contains(&name) => call_tool(backend, name, args),
+                _ => Err(format!("unknown tool `{name}` (in compact mode, run it with tool_call)")),
+            }
+        };
+        match &self.root {
+            Some(root) => file_access::confine(root, run),
+            None => run(),
+        }
     }
     pub fn backend(&mut self) -> &mut dyn Backend {
         self.backend.as_mut()
@@ -105,15 +177,15 @@ impl Server {
                     "protocolVersion": version,
                     "capabilities": {"tools": {"listChanged": false}, "resources": {"listChanged": false}},
                     "serverInfo": {"name": "cadcraft", "title": "CADCraft", "version": env!("CARGO_PKG_VERSION")},
-                    "instructions": format!("{INSTRUCTIONS} Backend: {}.", self.backend.describe()),
+                    "instructions": self.instructions(),
                 }))
             }
             "ping" => Ok(json!({})),
-            "tools/list" => Ok(tool_definitions(self.backend.has_ui())),
+            "tools/list" => Ok(json!({"tools": self.tools()})),
             "tools/call" => {
                 let name = params.get("name").and_then(Value::as_str).ok_or((INVALID_PARAMS, "missing tool `name`".to_string()))?;
                 let args = params.get("arguments").unwrap_or(&Value::Null);
-                call_tool(self.backend.as_mut(), name, args).map_err(|m| (INVALID_PARAMS, m))
+                self.call_tool(name, args).map_err(|m| (INVALID_PARAMS, m))
             }
             "resources/list" => Ok(json!({"resources": [
                 {"uri": "cadcraft://drawing", "name": "Active drawing", "mimeType": "application/json"},
@@ -121,12 +193,16 @@ impl Server {
             ]})),
             "resources/read" => {
                 let uri = params.get("uri").and_then(Value::as_str).unwrap_or("");
-                let v = match uri {
-                    "cadcraft://drawing" => self.backend.call("drawing.inspect", json!({})),
-                    "cadcraft://commands" => self.backend.call("engine.commands", json!({})),
-                    _ => return Err((-32002, format!("unknown resource `{uri}`"))),
-                }
-                .map_err(|e| (-32603, e))?;
+                let backend = self.backend.as_mut();
+                let mut read = || match uri {
+                    "cadcraft://drawing" => backend.call("drawing.inspect", json!({})).map_err(|e| (-32603, e)),
+                    "cadcraft://commands" => backend.call("engine.commands", json!({})).map_err(|e| (-32603, e)),
+                    _ => Err((-32002, format!("unknown resource `{uri}`"))),
+                };
+                let v = match &self.root {
+                    Some(root) => file_access::confine(root, read)?,
+                    None => read()?,
+                };
                 Ok(json!({"contents": [{"uri": uri, "mimeType": "application/json", "text": v.to_string()}]}))
             }
             _ => Err((METHOD_NOT_FOUND, format!("method `{method}` not found"))),

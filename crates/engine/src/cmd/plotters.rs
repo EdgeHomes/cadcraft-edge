@@ -79,7 +79,7 @@ impl PlotterStore {
         }
         PlotterStore {
             list: || {
-                let rd = match std::fs::read_dir(dir()?) {
+                let rd = match crate::file_access::read_dir(&dir()?) {
                     Ok(rd) => rd,
                     Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
                     Err(e) => return Err(e.to_string()),
@@ -92,18 +92,20 @@ impl PlotterStore {
             },
             read: |n| {
                 let p = file(n)?;
-                let len = std::fs::metadata(&p).map_err(|e| format!("{n}: {e}"))?.len();
+                let len = crate::file_access::metadata(&p).map_err(|e| format!("{n}: {e}"))?.len();
                 if len > cadcraft_doc::MAX_PLOTTER_FILE as u64 {
                     return Err(format!("{n}: the plotter configuration file is too large"));
                 }
-                std::fs::read_to_string(&p).map_err(|e| format!("{n}: {e}"))
+                crate::capped_read::read_capped(&p, cadcraft_doc::MAX_PLOTTER_FILE)
+                    .map(|b| String::from_utf8_lossy(&b).into_owned())
+                    .map_err(|e| format!("{n}: {e}"))
             },
             write: |n, t| {
                 let p = file(n)?;
-                std::fs::create_dir_all(dir()?).map_err(|e| e.to_string())?;
+                crate::file_access::create_dir_all(&dir()?).map_err(|e| e.to_string())?;
                 crate::atomic_write::write_atomic(&p, t.as_bytes()).map_err(|e| format!("{n}: {e}"))
             },
-            delete: |n| std::fs::remove_file(file(n)?).map_err(|e| format!("{n}: {e}")),
+            delete: |n| crate::file_access::remove_file(&file(n)?).map_err(|e| format!("{n}: {e}")),
         }
     }
 }
@@ -598,7 +600,8 @@ fn run_plottermanager(_s: &mut Session, p: &Value) -> Result<Value> {
                 Some(_path) => {
                     #[cfg(not(target_arch = "wasm32"))]
                     {
-                        std::fs::write(_path, &text).map_err(|e| bad(cmd, format!("{_path}: {e}")))?;
+                        crate::atomic_write::write_atomic(std::path::Path::new(_path), text.as_bytes())
+                            .map_err(|e| bad(cmd, format!("{_path}: {e}")))?;
                         Ok(json!({ "name": name, "path": _path }))
                     }
                     #[cfg(target_arch = "wasm32")]
