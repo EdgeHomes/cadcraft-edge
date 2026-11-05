@@ -83,6 +83,14 @@ cadcraft-cli tools [--compact] [--json]   # the tool list and instructions, for 
   them with a hard link, which fails if the name is taken (the folder's file system must support
   hard links). `save` without a path writes an unused name beside the opened drawing
   (`plan (2).dxf`); no `.bak` is written.
+- `--read-anywhere` (with `--root`; the Claude Desktop bundle) lets tools read files anywhere,
+  while writes stay in the root, new-only. A save without a path of a drawing opened from outside
+  the root, or from bytes, lands in the root under its name. It adds the `find_files {name,
+  folder?, limit?}` tool to the full list (never to `--compact`, not even through `tool_call`):
+  files whose name contains `name`, newest first, searched in the working folder, Desktop,
+  Downloads, Documents and home (hidden, `Library`, `AppData` and `node_modules` folders skipped;
+  200,000 entries, depth 12 and 10 s at most; links not followed). `open {data, name}` opens a file
+  sent as base64, up to 2 MiB.
 - `--compact` lists 12 core tools (`drawing_create`, `file_attach`, `open`, `save`,
   `inspect_drawing`, `query_entities`, `find_text`, `command_line`, `script`, `execute`,
   `list_commands`, `render`) plus `tool_search` and `tool_call`. `tool_call` returns exactly what

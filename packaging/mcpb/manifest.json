@@ -2,9 +2,9 @@
   "manifest_version": "0.3",
   "name": "cadcraft",
   "display_name": "CADCraft",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "description": "Make and edit CAD drawings (DXF, DWG) with CADCraft, an open-source CAD engine, in a folder you choose.",
-  "long_description": "CADCraft makes new drawings from a description (layers, lines, polylines, circles, arcs, text, dimensions, hatches, blocks) and opens, inspects, edits, renders and saves DXF and DWG drawings with AutoCAD-style commands. Every file it reads or writes stays inside the working folder you choose, and it never replaces a file there: edits are saved under new names.",
+  "long_description": "CADCraft makes new drawings from a description (layers, lines, polylines, circles, arcs, text, dimensions, hatches, blocks) and opens, inspects, edits, renders and saves DXF and DWG drawings with AutoCAD-style commands. It opens drawings from anywhere on this computer (and finds a file you drop into the chat by its name), but every file it writes goes into the working folder you choose, and it never replaces a file there: edits are saved under new names.",
   "author": {
     "name": "CADCraft contributors",
     "url": "https://github.com/storytold/cadcraft"
@@ -31,6 +31,7 @@
       "args": [
         "mcp",
         "--create-root",
+        "--read-anywhere",
         "--root",
         "${user_config.working_folder}"
       ],
@@ -46,7 +47,7 @@
     "working_folder": {
       "type": "directory",
       "title": "Working folder",
-      "description": "The folder CADCraft reads drawings from and saves them to. It can't reach files outside it, and it never replaces a file there. Made on first use if it doesn't exist.",
+      "description": "The folder CADCraft saves drawings to. It opens drawings from anywhere on this computer, but writes only here, and never replaces a file here: edits are saved under new names. Made on first use if it doesn't exist.",
       "required": true,
       "default": "${DOCUMENTS}/CADCraft"
     }
@@ -96,7 +97,11 @@
     },
     {
       "name": "open",
-      "description": "Open a DXF or DWG drawing with CADCraft. When the user attaches a drawing, its absolute path is provided in context: open that exact path, inspect and edit what was asked, save under a new name, then call file_attach so the user can download it. Never write Python or other code to create, read or edit a drawing. The reply lists `warnings`: what reading left out; tell the user about them."
+      "description": "Open a DXF or DWG drawing with CADCraft. When the user attaches a drawing, its absolute path is provided in context: open that exact path, inspect and edit what was asked, save under a new name, then call file_attach so the user can download it. If it isn't on this computer's disk (a drawing dropped into a Claude Desktop chat), find it with find_files when that tool is offered; a small file you can't reach by path can be sent as `data` (base64) with its `name`. Never write Python or other code to create, read or edit a drawing. The reply lists `warnings`: what reading left out; tell the user about them."
+    },
+    {
+      "name": "find_files",
+      "description": "Find files on this computer by name (any case, part of the name is enough), newest first, with their absolute paths. When the user attaches or drops a drawing into the chat, the file isn't on this computer's disk: search for its name here, then open the path found. Searches the working folder, Desktop, Downloads, Documents and the home folder unless `folder` is given."
     },
     {
       "name": "save",

@@ -14,6 +14,7 @@ pub mod compact;
 pub mod control_token;
 mod create;
 pub mod delivery;
+mod files;
 mod server;
 mod tools;
 

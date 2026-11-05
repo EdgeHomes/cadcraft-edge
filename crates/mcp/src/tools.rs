@@ -4,7 +4,10 @@ use serde_json::{Value, json};
 
 use crate::backend::Backend;
 
-const OPEN_DESCRIPTION: &str = "Open a DXF or DWG drawing with CADCraft. When the user attaches a drawing, its absolute path is provided in context: open that exact path, inspect and edit what was asked, save under a new name, then call file_attach so the user can download it. Never write Python or other code to create, read or edit a drawing. The reply lists `warnings`: what reading left out; tell the user about them.";
+/// The largest file `open` takes as bytes (`data`).
+const MAX_OPEN_DATA: usize = 2 * 1024 * 1024;
+
+const OPEN_DESCRIPTION: &str = "Open a DXF or DWG drawing with CADCraft. When the user attaches a drawing, its absolute path is provided in context: open that exact path, inspect and edit what was asked, save under a new name, then call file_attach so the user can download it. If it isn't on this computer's disk (a drawing dropped into a Claude Desktop chat), find it with find_files when that tool is offered; a small file you can't reach by path can be sent as `data` (base64) with its `name`. Never write Python or other code to create, read or edit a drawing. The reply lists `warnings`: what reading left out; tell the user about them.";
 
 const CREATE_DESCRIPTION: &str = "Make a new, editable CAD drawing (.dxf recommended, or .dwg) in one call from structured JSON, and attach it for download. Give units, layers (name, color, linetype, lineweight), optional blocks, and entities: line, polyline, rectangle, circle, arc, text, mtext, dimension (linear, aligned, radius, diameter), hatch (a closed boundary and a pattern) and insert (of a block). Text and dimension sizes follow a plot scale chosen to fit an A3 sheet (or `scale`). The file gets an unused name if the path is taken. Never write Python or other code to create, read or edit a drawing. Returns a JSON summary (with anything `dropped`) and the file. To edit it later, open its path.";
 
@@ -38,7 +41,12 @@ pub fn tool_definitions(has_ui: bool) -> Value {
                 "limit": {"type": "integer", "minimum": 0}, "offset": {"type": "integer", "minimum": 0}}}}),
         json!({"name": "new_drawing", "description": "Create a new drawing (imperial by default, or metric).",
             "inputSchema": {"type": "object", "properties": {"metric": {"type": "boolean"}}}}),
-        json!({"name": "open", "description": OPEN_DESCRIPTION, "inputSchema": {"type": "object", "properties": {"path": {"type": "string", "description": "The drawing's absolute path (an attached upload's path is given in context), or a path relative to the working folder"}}, "required": ["path"]}}),
+        json!({"name": "open", "description": OPEN_DESCRIPTION, "inputSchema": {"type": "object", "properties": {
+            "path": {"type": "string", "description": "The drawing's absolute path (an attached upload's path is given in context), or a path relative to the working folder"},
+            "data": {"type": "string", "description": "Instead of `path`: the file's contents in base64, at most 2 MiB of file (only when the file can't be reached by path)"},
+            "name": {"type": "string", "description": "With `data`: the file name, e.g. plan.dxf (its extension picks the format)"}}}}),
+        json!({"name": "find_files", "description": "Find files on this computer by name (any case, part of the name is enough), newest first, with their absolute paths. When the user attaches or drops a drawing into the chat, the file isn't on this computer's disk: search for its name here, then open the path found. Searches the working folder, Desktop, Downloads, Documents and the home folder unless `folder` is given.",
+            "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}, "folder": {"type": "string", "description": "Search only this folder (absolute path)"}, "limit": {"type": "integer", "minimum": 1}}, "required": ["name"]}}),
         json!({"name": "save", "description": "Save the drawing (DXF or DWG by extension). A .svg, .png or .pdf path exports instead: the drawing keeps its name and unsaved changes. In a working folder (--root) an existing file is never replaced: save under a new name, and a save without a path writes an unused name beside the opened drawing (`plan (2).dxf`). Then call file_attach with the saved path.", "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}}}}),
         json!({"name": "drawing_create", "description": CREATE_DESCRIPTION, "inputSchema": crate::create::schema()}),
         json!({"name": "file_attach", "description": "Give the user a file a tool wrote, as a download: a .dwg, .dxf, .pdf, .svg, .png, .jpeg, .csv, .txt, .docx, .xlsx or .pptx file in the working folder, up to 32 MiB. Returns a short note and the file as an embedded resource.",
@@ -144,7 +152,20 @@ pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> Result<Value,
             return Ok(crate::delivery::attach(a.get("path").and_then(Value::as_str).unwrap_or_default()).unwrap_or_else(|e| err_text(&e)));
         }
         "new_drawing" => b.call("engine.execute", json!({"command": "new", "params": a})),
-        "open" => b.call("app.open", a),
+        "open" => match (a.get("path").and_then(Value::as_str), a.get("data").and_then(Value::as_str)) {
+            (Some(_), None) => b.call("app.open", a),
+            (None, Some(data)) => {
+                // 2 MiB of file is about 2.8 MB of base64; refused before it is decoded.
+                if data.len() > MAX_OPEN_DATA.div_ceil(3) * 4 {
+                    return Ok(err_text("`data` is over the 2 MiB limit for files sent as bytes; put the file on disk and open its path"));
+                }
+                let name = a.get("name").and_then(Value::as_str).filter(|n| !n.is_empty()).unwrap_or("drawing.dxf");
+                let name = std::path::Path::new(name).file_name().and_then(|n| n.to_str()).unwrap_or("drawing.dxf");
+                b.call("engine.execute", json!({"command": "open", "params": {"data": data, "name": name}}))
+            }
+            _ => return Err("`open` needs either `path` or `data` (with `name`)".into()),
+        },
+        "find_files" => crate::files::find(&a),
         "save" => b.call("app.save", a),
         "cancel" => b.call("cmdline.key", json!({"key": "escape"})),
         "screenshot" => b.call("ui.screenshot", a),

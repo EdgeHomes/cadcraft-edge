@@ -22,14 +22,15 @@ pub(crate) fn mcp(a: &McpArgs) -> Result {
                 }
                 std::fs::create_dir_all(dir).map_err(|e| CliError::Root(format!("--root {}: the folder could not be made: {e}", dir.display())))?;
             }
-            let root = Root::new(dir).map_err(CliError::Root)?;
+            let root = if a.read_anywhere { Root::new_reading_anywhere(dir) } else { Root::new(dir) }.map_err(CliError::Root)?;
             // Relative paths are the working folder's.
             std::env::set_current_dir(root.path()).map_err(|e| CliError::Root(format!("--root {}: {e}", root.path().display())))?;
             // The settings folder is outside it: plotter configurations aren't read or written.
             cadcraft_engine::settings_dir::set(None);
             // Every thread of this process, not only the server's.
             file_access::confine_process(root.clone());
-            eprintln!("cadcraft-cli: files confined to {}; saves create new files only", root.path().display());
+            let reads = if a.read_anywhere { "reads from anywhere, writes" } else { "files" };
+            eprintln!("cadcraft-cli: {reads} confined to {}; saves create new files only", root.path().display());
             Some(root)
         }
         None => None,

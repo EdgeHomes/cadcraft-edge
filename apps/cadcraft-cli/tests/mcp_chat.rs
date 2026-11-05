@@ -432,7 +432,7 @@ fn tools_command_prints_the_catalog_for_deployment_checks() {
     assert_eq!(full["name"], "cadcraft");
     assert!(full["instructions"].as_str().unwrap().starts_with("CADCraft makes and edits CAD drawings. To make a new drawing, call drawing_create."));
     let n = |v: &Value| v["tools"].as_array().unwrap().len();
-    assert!(n(&full) >= 14 && n(&compact) <= 18, "{} {}", n(&full), n(&compact));
+    assert!(n(&full) >= 15 && n(&compact) <= 18, "{} {}", n(&full), n(&compact));
     assert!(compact["tools"].to_string().contains("tool_call") && !full["tools"].to_string().contains("tool_call"));
     for t in ["drawing_create", "open"] {
         let d = full["tools"].as_array().unwrap().iter().find(|x| x["name"] == t).unwrap()["description"].to_string();
@@ -453,7 +453,10 @@ fn the_mcpb_manifest_matches_the_tool_list() {
         tools.as_array().unwrap().iter().map(|t| (t["name"].as_str().unwrap().into(), t["description"].as_str().unwrap().into())).collect()
     };
     assert_eq!(pairs(&manifest["tools"]), pairs(&full["tools"]), "run packaging/mcpb/build.sh --manifest-only");
-    assert_eq!(manifest["version"], full["version"]);
+    // The bundle may be versioned on its own (MCPB_VERSION), but as a semantic version.
+    let v = manifest["version"].as_str().unwrap();
+    assert_eq!(v.split('.').filter(|p| p.parse::<u32>().is_ok()).count(), 3, "{v}");
+    assert!(manifest["server"]["mcp_config"]["args"].to_string().contains("--read-anywhere"));
 }
 
 #[test]
@@ -470,5 +473,66 @@ fn create_root_makes_an_absolute_working_folder_and_refuses_a_relative_one() {
     // An unsubstituted or empty value never runs unconfined.
     let out = Command::new(BIN).args(["mcp", "--create-root", "--root", ""]).stdin(Stdio::null()).output().unwrap();
     assert!(!out.status.success(), "{out:?}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Claude Desktop: chat attachments aren't on disk, so the bundle reads from anywhere and finds
+/// files by name; every write still lands in the working folder as a new file.
+#[test]
+fn read_anywhere_opens_files_elsewhere_and_saves_into_the_working_folder() {
+    let base = folder("anywhere");
+    let (work, elsewhere) = (base.join("work"), base.join("elsewhere/deep"));
+    std::fs::create_dir_all(&work).unwrap();
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let mut maker = Mcp::start(&[]);
+    let mut p = plan();
+    p["path"] = json!(elsewhere.join("Dropped Plan.dxf").to_str().unwrap());
+    maker.ok("drawing_create", p);
+    drop(maker);
+    let dropped = elsewhere.join("Dropped Plan.dxf");
+    let original = std::fs::read(&dropped).unwrap();
+
+    let mut m = Mcp::start(&["--read-anywhere", "--root", work.to_str().unwrap()]);
+    let init = m.rpc("initialize", json!({}));
+    assert!(init["result"]["instructions"].as_str().unwrap().contains("find_files"), "{init}");
+    let found = m.ok("find_files", json!({"name": "DROPPED plan", "folder": base.to_str().unwrap()}));
+    assert_eq!(found["count"], 1, "{found}");
+    assert_eq!(Path::new(found["files"][0]["path"].as_str().unwrap()), dropped);
+    m.ok("open", json!({"path": dropped.to_str().unwrap()}));
+    let saved = m.ok("save", json!({}));
+    assert_eq!(Path::new(saved["path"].as_str().unwrap()), work.join("Dropped Plan.dxf"), "{saved}");
+    assert!(m.err("save", json!({"path": elsewhere.join("x.dxf").to_str().unwrap()})).contains("outside the working folder"));
+    assert!(m.err("render", json!({"path": base.join("x.png").to_str().unwrap()})).contains("outside the working folder"));
+    // From bytes, for a small file that can't be reached by path.
+    let b64 = {
+        const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut s = String::new();
+        for c in original.chunks(3) {
+            let n = c.iter().enumerate().fold(0u32, |n, (i, b)| n | (u32::from(*b) << (16 - 8 * i)));
+            for i in 0..4 {
+                s.push(if i <= c.len() { char::from(A[((n >> (18 - 6 * i)) & 63) as usize]) } else { '=' });
+            }
+        }
+        s
+    };
+    m.ok("open", json!({"data": b64, "name": "From Chat.dxf"}));
+    assert_eq!(m.ok("find_text", json!({"contains": "bedroom"}))["count"], 1);
+    let saved = m.ok("save", json!({}));
+    assert_eq!(Path::new(saved["path"].as_str().unwrap()), work.join("From Chat.dxf"));
+    assert!(m.err("open", json!({"data": "A".repeat(3 * 1024 * 1024), "name": "big.dxf"})).contains("2 MiB"));
+    assert!(m.err("open", json!({})).contains("`path` or `data`"));
+    assert_eq!(std::fs::read(&dropped).unwrap(), original, "the original is untouched");
+    assert_eq!(names(&work), ["Dropped Plan.dxf", "From Chat.dxf"]);
+    drop(m);
+
+    // Without --read-anywhere the working folder still confines reads, and compact (LibreChat)
+    // never offers find_files.
+    let mut strict = Mcp::rooted(&work, false);
+    assert!(strict.err("open", json!({"path": dropped.to_str().unwrap()})).contains("outside the working folder"));
+    let mut compact = Mcp::rooted(&work, true);
+    let tools = compact.rpc("tools/list", json!({}))["result"]["tools"].clone();
+    assert!(tools.as_array().unwrap().iter().all(|t| t["name"] != "find_files"), "{tools}");
+    assert!(compact.err("tool_call", json!({"name": "find_files", "arguments": {"name": "x"}})).contains("compact"));
+    assert!(compact.ok("tool_search", json!({"query": "find"})).as_array().unwrap().iter().all(|t| t["name"] != "find_files"));
     let _ = std::fs::remove_dir_all(base);
 }

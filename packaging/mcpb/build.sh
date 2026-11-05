@@ -14,7 +14,8 @@ repo=$(cd "$here/../.." && pwd)
 export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-1.97.1}"
 target_dir="${CARGO_TARGET_DIR:-$repo/target}"
 MCPB="npx -y @anthropic-ai/mcpb@2.1.2"
-version=$(sed -n 's/^version = "\(.*\)"/\1/p' "$repo/Cargo.toml" | head -n 1)
+# MCPB_VERSION versions the bundle on its own (e.g. a packaging-only fix); default: the workspace's.
+version=${MCPB_VERSION:-$(sed -n 's/^version = "\(.*\)"/\1/p' "$repo/Cargo.toml" | head -n 1)}
 [ -n "$version" ] || { echo "build.sh: no workspace version in Cargo.toml" >&2; exit 1; }
 timeout_run() { perl -e 'alarm shift; exec @ARGV' "$@"; }
 
@@ -27,10 +28,10 @@ import json, sys
 tools = json.load(sys.stdin)
 path = sys.argv[1]
 m = json.load(open(path))
-m["version"] = tools["version"]
+m["version"] = sys.argv[2]
 m["tools"] = [{"name": t["name"], "description": t["description"]} for t in tools["tools"]]
 open(path, "w").write(json.dumps(m, indent=2, ensure_ascii=False) + "\n")
-' "$here/manifest.json"
+' "$here/manifest.json" "$version"
 }
 
 if [ "${1:-}" = "--manifest-only" ]; then

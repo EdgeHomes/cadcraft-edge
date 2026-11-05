@@ -34,11 +34,23 @@ pub struct Root {
     resolved: PathBuf,
     /// The same without Windows' `\\?\` prefix, for people.
     shown: PathBuf,
+    /// Reads may come from anywhere (`--read-anywhere`); writes stay inside the folder.
+    read_anywhere: bool,
 }
 
 impl Root {
     /// The existing folder `dir`; an error names the flag when it is missing or not a folder.
     pub fn new(dir: &Path) -> Result<Arc<Self>, String> {
+        Self::open(dir, false)
+    }
+
+    /// [`Root::new`] where reads may come from anywhere and only writes are confined to `dir`
+    /// (`--read-anywhere`: Claude Desktop, whose chat attachments stay where they are on disk).
+    pub fn new_reading_anywhere(dir: &Path) -> Result<Arc<Self>, String> {
+        Self::open(dir, true)
+    }
+
+    fn open(dir: &Path, read_anywhere: bool) -> Result<Arc<Self>, String> {
         if dir.as_os_str().is_empty() {
             return Err("--root needs a folder".into());
         }
@@ -46,7 +58,12 @@ impl Root {
         if !resolved.is_dir() {
             return Err(format!("--root {} is not a folder", dir.display()));
         }
-        Ok(Arc::new(Self { shown: plain(resolved.clone()), resolved }))
+        Ok(Arc::new(Self { shown: plain(resolved.clone()), resolved, read_anywhere }))
+    }
+
+    /// Whether reads may come from anywhere ([`Root::new_reading_anywhere`]).
+    pub fn reads_anywhere(&self) -> bool {
+        self.read_anywhere
     }
 
     /// The folder, absolute with its links followed.
@@ -105,9 +122,27 @@ pub fn replace_allowed() -> bool {
     current().is_none()
 }
 
-/// May `path` be read here? Always, without a root in force.
+/// May `path` be read here? Always, without a root in force or with one that reads anywhere.
 pub fn check_read(path: &Path) -> Result<(), String> {
-    current().map_or(Ok(()), |r| r.check(path))
+    current().filter(|r| !r.read_anywhere).map_or(Ok(()), |r| r.check(path))
+}
+
+/// Whether reads may come from outside the working folder ([`Root::new_reading_anywhere`]).
+pub fn reads_anywhere() -> bool {
+    current().is_none_or(|r| r.read_anywhere)
+}
+
+/// Where a save without a path publishes `path` (the opened drawing, or a bare name): itself
+/// without a root in force; else an unused name beside it when it is inside the working folder,
+/// or in the working folder when it isn't (a drawing opened from elsewhere, or from bytes).
+pub fn publish_name(path: &Path) -> Result<PathBuf, String> {
+    let Some(root) = current() else { return Ok(path.to_path_buf()) };
+    let beside = path.parent().is_some_and(|d| !d.as_os_str().is_empty()) && root.check(path).is_ok();
+    if beside {
+        return unused_name(path);
+    }
+    let name = path.file_name().ok_or_else(|| format!("{}: the file needs a name", path.display()))?;
+    unused_name(&root.path().join(name))
 }
 
 /// May `path` be written here? Always, without a root in force.
@@ -357,6 +392,28 @@ mod tests {
         assert_eq!(root.check(Path::new(&mixed)), Ok(()));
         assert!(root.check(Path::new(r"C:\Windows\win.ini")).is_err());
         assert!(root.check(Path::new(r"\\server\share\x.dxf")).is_err(), "a UNC path outside");
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn reading_anywhere_confines_only_writes_and_saves_land_in_the_root() {
+        let (base, _) = folders("anywhere");
+        let root = Root::new_reading_anywhere(&base.join("root")).unwrap();
+        let secret = base.join("outside/secret.dxf");
+        confine(&root, || {
+            assert_eq!(check_read(&secret), Ok(()));
+            assert!(reads_anywhere());
+            assert!(check_write(&secret).is_err(), "writes stay in the working folder");
+            assert!(check_write(&base.join("outside/new.dxf")).is_err());
+            assert_eq!(publish_name(&secret).unwrap(), root.path().join("secret.dxf"), "a drawing from elsewhere saves into the root");
+            assert_eq!(publish_name(Path::new("bytes.dxf")).unwrap(), root.path().join("bytes.dxf"), "an opened-from-bytes name too");
+            assert_eq!(publish_name(&root.path().join("a.dxf")).unwrap(), root.path().join("a (2).dxf"), "beside a drawing inside it");
+        });
+        let strict = Root::new(&base.join("root")).unwrap();
+        confine(&strict, || {
+            assert!(check_read(&secret).is_err());
+            assert!(!reads_anywhere());
+        });
         let _ = std::fs::remove_dir_all(base);
     }
 

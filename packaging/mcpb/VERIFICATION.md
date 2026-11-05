@@ -1,5 +1,29 @@
 # Claude Desktop bundle (.mcpb) verification
 
+## 0.17.1 (2026-11-05): read from anywhere
+
+Installed in Claude Desktop, 0.17.0 couldn't open a drawing dropped into the chat: Claude Desktop
+uploads the drop to the chat's sandbox and keeps no copy on this Mac (none was found under its
+folders or the temporary folders), so a working-folder-only server can't reach it. 0.17.1 starts
+the server with `--read-anywhere` and adds `find_files` and `open {data, name}`.
+
+`MCPB_VERSION=0.17.1 packaging/mcpb/build.sh` → `dist/cadcraft-0.17.1.mcpb`, **40.7 MB**
+(42,697,149 bytes; 103.6 MB unpacked, 8 files; SHA-256
+`f35b79cc5b7e9d569e015c22409576d552d169416214082a81491b3c9833deb1`). `mcpb validate` passes; 15
+tools; the binary still reports 0.17.0 (only the bundle was bumped).
+
+Checked on the binary **unpacked from the bundle** (macOS arm64): the stdio script passed in both
+modes with the same hashes as below; a drawing in an unrelated folder was found by name with
+`find_files`, opened by path, saved without a path into the working folder, a write outside was
+refused, and a file sent as `data` opened and saved into the working folder. Tests:
+`read_anywhere_opens_files_elsewhere_and_saves_into_the_working_folder` and
+`file_access::tests::reading_anywhere_confines_only_writes_and_saves_land_in_the_root`, each seen to
+fail with its fix reverted (reads confined anyway; pathless save beside a drawing outside;
+`find_files` through compact `tool_call`; no 2 MiB cap on bytes) and pass restored. Not run in
+Claude Desktop by me, nor on Windows or the x86_64 slice.
+
+## 0.17.0
+
 Date: 2026-11-05. Version **0.17.0**. Toolchain: Rust **1.97.1**; `@anthropic-ai/mcpb` **2.1.2**
 (manifest spec 0.3, the spec's current version); `cargo-xwin` 0.23.1. No fonts embedded. This
 records exactly what was checked and where. Shared server checks (tests, regression proofs,

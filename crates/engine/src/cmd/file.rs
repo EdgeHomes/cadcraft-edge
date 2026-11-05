@@ -700,14 +700,19 @@ fn saved(path: &str, bytes: usize) -> Value {
 fn run_save(s: &mut Session, p: &Value) -> Result<Value> {
     let path = match str_param(p, "path") {
         Some(p) => p.to_string(),
+        None if crate::file_access::replace_allowed() => {
+            s.state()?.path.clone().ok_or_else(|| bad("qsave", "drawing has no file name yet; use saveas {path}"))?
+        }
+        // In the working folder nothing is replaced: the save is a new file beside the drawing, or
+        // in the working folder for one opened from elsewhere or from bytes (named by its title).
         None => {
-            let path = s.state()?.path.clone().ok_or_else(|| bad("qsave", "drawing has no file name yet; use saveas {path}"))?;
-            // In the working folder nothing is replaced: the save is a new file beside the drawing.
-            if crate::file_access::replace_allowed() {
-                path
-            } else {
-                crate::file_access::unused_name(std::path::Path::new(&path)).map_err(|e| bad("qsave", e))?.to_string_lossy().into_owned()
-            }
+            let st = s.state()?;
+            let base = match &st.path {
+                Some(p) => p.clone(),
+                None if is_drawing_file(&st.title) => st.title.clone(),
+                None => return Err(bad("qsave", "drawing has no file name yet; use saveas {path}")),
+            };
+            crate::file_access::publish_name(std::path::Path::new(&base)).map_err(|e| bad("qsave", e))?.to_string_lossy().into_owned()
         }
     };
     let n = save_to(s, &path)?;

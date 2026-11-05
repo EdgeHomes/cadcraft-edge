@@ -2,7 +2,7 @@
 
 `cadcraft-<version>.mcpb` is a [MCP Bundle](https://github.com/modelcontextprotocol/mcpb) that
 runs CADCraft's own MCP server (`cadcraft-cli mcp`) inside Claude Desktop on macOS and Windows.
-It offers every tool (no `--compact`): `drawing_create`, `open`, `save`, `file_attach`,
+It offers every tool (no `--compact`): `drawing_create`, `open`, `find_files`, `save`, `file_attach`,
 `inspect_drawing`, `query_entities`, `find_text`, `command_line`, `script`, `execute`,
 `list_commands`, `render`, `new_drawing` and `cancel`.
 
@@ -18,11 +18,17 @@ It offers every tool (no `--compact`): `drawing_create`, `open`, `save`, `file_a
 
 ## The working folder
 
-The server is always started as `cadcraft-cli mcp --create-root --root <working folder>`.
+The server is always started as `cadcraft-cli mcp --create-root --read-anywhere --root <working folder>`.
 
-- Every file a tool reads or writes must be inside that folder (links are followed, `..` is
-  resolved, and on Windows device names such as `CON` and `NUL` are refused). Relative paths are
-  inside it. The extension never reaches the rest of the disk.
+- **Reading:** drawings can be opened from anywhere on the computer (`--read-anywhere`). Claude
+  Desktop doesn't put a file dropped into the chat on your disk (it goes to the chat's own
+  sandbox), so the model looks the original up by name with `find_files` (working folder, Desktop,
+  Downloads, Documents, then the home folder, newest first) and opens that path. A small file it
+  can't find (up to 2 MiB) can be sent as bytes: `open {data, name}`.
+- **Writing:** every file a tool writes must be inside the working folder (links are followed,
+  `..` is resolved, and on Windows device names such as `CON` and `NUL` are refused). Relative
+  paths are inside it. A drawing opened from elsewhere is saved into the working folder under its
+  own name (an unused one: `plan (2).dxf` if `plan.dxf` is there).
 - Nothing in it is ever replaced. A save writes a new file (`plan (2).dxf` beside `plan.dxf`), so
   the original you gave stays as it was. Files are published with hard links, so the folder must
   be on a file system that supports them (APFS, HFS+, NTFS and ext4 all do; FAT32/exFAT drives
@@ -31,7 +37,6 @@ The server is always started as `cadcraft-cli mcp --create-root --root <working 
   absolute path; Claude Desktop's folder picker and the `${DOCUMENTS}/CADCraft` default both give
   one. An empty or relative value makes the server stop with an error instead of running
   unconfined.
-- To work on a drawing from elsewhere, copy it into the working folder first.
 
 ## Files in the bundle
 
@@ -57,7 +62,8 @@ Windows binary with [`cargo-xwin`](https://github.com/rust-cross/cargo-xwin) (`c
 --locked cargo-xwin`; it downloads Microsoft's CRT and Windows SDK headers on first use), refreshes
 `manifest.json`'s version and tools from `cadcraft-cli tools --json`, then runs `mcpb validate` and
 `mcpb pack` (`@anthropic-ai/mcpb` 2.1.2, through `npx`). The result is
-`dist/cadcraft-<version>.mcpb` (`dist/` is ignored by git).
+`dist/cadcraft-<version>.mcpb` (`dist/` is ignored by git). `MCPB_VERSION=0.17.1` versions the
+bundle on its own, e.g. for a packaging-only release; the server binary keeps the workspace version.
 
 After changing a tool, run `packaging/mcpb/build.sh --manifest-only` and commit `manifest.json`:
 the test `the_mcpb_manifest_matches_the_tool_list` fails while they differ.

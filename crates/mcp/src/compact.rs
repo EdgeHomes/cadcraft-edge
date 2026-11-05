@@ -51,7 +51,8 @@ pub fn definitions() -> Vec<Value> {
 
 /// Every direct tool of a headless server (what `tool_call` can run).
 fn all() -> Vec<Value> {
-    tool_definitions(false)["tools"].as_array().cloned().unwrap_or_default()
+    // No directory listing in compact mode (LibreChat), not even through tool_call.
+    tool_definitions(false)["tools"].as_array().into_iter().flatten().filter(|t| t["name"] != "find_files").cloned().collect()
 }
 
 /// `tool_search {query?, name?}`.

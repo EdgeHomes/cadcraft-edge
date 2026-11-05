@@ -69,10 +69,19 @@ impl Server {
     pub fn instructions(&self) -> String {
         let mut s = format!("{INSTRUCTIONS} Backend: {}.", self.backend.describe());
         if let Some(root) = &self.root {
-            s.push_str(&format!(
-                " Files are confined to the working folder {}: relative paths are inside it, and saving never replaces a file there.",
-                root.path().display()
-            ));
+            if root.reads_anywhere() && !self.compact {
+                s.push_str(&format!(
+                    " Drawings can be opened from anywhere on this computer; everything is saved in the working folder {} (relative paths are \
+inside it) and saving never replaces a file there. A file dropped into the chat is not on this computer's disk: call find_files with \
+its name and open the path found; if it can't be found and is small, send it to open as `data` (base64) with its `name`.",
+                    root.path().display()
+                ));
+            } else {
+                s.push_str(&format!(
+                    " Files are confined to the working folder {}: relative paths are inside it, and saving never replaces a file there.",
+                    root.path().display()
+                ));
+            }
         }
         if self.compact {
             s.push_str(" More tools: tool_search, then tool_call.");
@@ -96,6 +105,9 @@ impl Server {
                     let inner = args.get("name").and_then(Value::as_str).ok_or("tool_call needs the tool `name`")?;
                     if compact::META.contains(&inner) {
                         return Err(format!("tool_call can't run {inner}"));
+                    }
+                    if inner == "find_files" {
+                        return Err("find_files isn't offered in compact mode".into());
                     }
                     call_tool(backend, inner, args.get("arguments").unwrap_or(&Value::Null))
                 }

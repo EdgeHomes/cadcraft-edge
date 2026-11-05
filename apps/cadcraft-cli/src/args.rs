@@ -286,6 +286,10 @@ pub(crate) struct McpArgs {
     /// an absolute path (the Claude Desktop bundle's default working folder)
     #[arg(long, requires = "root")]
     pub(crate) create_root: bool,
+    /// Let the tools read files anywhere on this computer; writes stay in the --root folder,
+    /// as new files only (the Claude Desktop bundle, whose chat attachments aren't on disk)
+    #[arg(long, requires = "root")]
+    pub(crate) read_anywhere: bool,
     /// Offer a short core tool list plus tool_search and tool_call, for chat clients
     #[arg(long)]
     pub(crate) compact: bool,
