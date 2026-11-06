@@ -40,7 +40,7 @@ impl Mcp {
 
     fn rooted(root: &Path, compact: bool) -> Mcp {
         let r = root.to_str().unwrap();
-        if compact { Mcp::start(&["--compact", "--root", r]) } else { Mcp::start(&[&format!("--root={r}")]) }
+        if compact { Mcp::start(&["--compact", "--confine", "--root", r]) } else { Mcp::start(&["--confine", &format!("--root={r}")]) }
     }
 
     fn rpc(&mut self, method: &str, params: Value) -> Value {
@@ -353,11 +353,11 @@ fn rooted_writes_never_replace_and_default_saves_take_unused_names() {
 #[test]
 fn a_missing_root_and_a_root_with_connect_are_refused() {
     let base = folder("badroot");
-    let out = Command::new(BIN).args(["mcp", "--root"]).arg(base.join("nope")).stdin(Stdio::null()).output().unwrap();
+    let out = Command::new(BIN).args(["mcp", "--confine", "--root"]).arg(base.join("nope")).stdin(Stdio::null()).output().unwrap();
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("must be an existing folder"), "{out:?}");
     std::fs::write(base.join("file"), "x").unwrap();
-    let out = Command::new(BIN).args(["mcp", "--root"]).arg(base.join("file")).stdin(Stdio::null()).output().unwrap();
+    let out = Command::new(BIN).args(["mcp", "--confine", "--root"]).arg(base.join("file")).stdin(Stdio::null()).output().unwrap();
     assert!(String::from_utf8_lossy(&out.stderr).contains("not a folder"), "{out:?}");
     let out = Command::new(BIN).args(["mcp", "--connect", "127.0.0.1:9", "--root"]).arg(&base).stdin(Stdio::null()).output().unwrap();
     assert!(!out.status.success());
@@ -463,15 +463,20 @@ fn the_mcpb_manifest_matches_the_tool_list() {
 fn create_root_makes_an_absolute_working_folder_and_refuses_a_relative_one() {
     let base = folder("createroot");
     let made = base.join("Documents").join("CADCraft");
-    let mut m = Mcp::start(&["--create-root", "--root", made.to_str().unwrap()]);
+    let mut m = Mcp::start(&["--create-root", "--read-anywhere", "--root", made.to_str().unwrap()]);
     m.ok("drawing_create", json!({"path": "a.dxf", "entities": [{"type": "circle", "center": [0, 0], "radius": 1}]}));
     assert_eq!(names(&made), ["a.dxf"]);
     drop(m);
-    let out = Command::new(BIN).args(["mcp", "--create-root", "--root", "relative/folder"]).current_dir(&base).stdin(Stdio::null()).output().unwrap();
+    let out = Command::new(BIN)
+        .args(["mcp", "--create-root", "--read-anywhere", "--root", "relative/folder"])
+        .current_dir(&base)
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
     assert!(String::from_utf8_lossy(&out.stderr).contains("must be an absolute path"), "{out:?}");
     assert!(!base.join("relative").exists());
     // An unsubstituted or empty value never runs unconfined.
-    let out = Command::new(BIN).args(["mcp", "--create-root", "--root", ""]).stdin(Stdio::null()).output().unwrap();
+    let out = Command::new(BIN).args(["mcp", "--create-root", "--read-anywhere", "--root", ""]).stdin(Stdio::null()).output().unwrap();
     assert!(!out.status.success(), "{out:?}");
     let _ = std::fs::remove_dir_all(base);
 }
@@ -534,5 +539,48 @@ fn read_anywhere_opens_files_elsewhere_and_saves_into_the_working_folder() {
     assert!(tools.as_array().unwrap().iter().all(|t| t["name"] != "find_files"), "{tools}");
     assert!(compact.err("tool_call", json!({"name": "find_files", "arguments": {"name": "x"}})).contains("compact"));
     assert!(compact.ok("tool_search", json!({"query": "find"})).as_array().unwrap().iter().all(|t| t["name"] != "find_files"));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// ChatGPT plugin: `--root ~/Documents/CADCraft` alone is unrestricted. The folder is made under
+/// the home folder and new drawings go there, files elsewhere are opened and saved where they are,
+/// and dropped files are found by name.
+#[test]
+fn an_unconfined_root_is_a_home_relative_working_folder_and_reaches_everything() {
+    let base = folder("unconfined");
+    let home = base.join("home");
+    let elsewhere = base.join("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let mut child = Command::new(BIN)
+        .args(["mcp", "--root", "~/Documents/CADCraft"])
+        .env("HOME", &home)
+        .env("USERPROFILE", &home)
+        .env("CADCRAFT_CONFIG_DIR", "")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let (stdin, stdout) = (child.stdin.take().unwrap(), BufReader::new(child.stdout.take().unwrap()));
+    let mut m = Mcp { child, stdin, stdout, id: 0 };
+    let work = home.join("Documents").join("CADCraft");
+    let init = m.rpc("initialize", json!({}));
+    let text = init["result"]["instructions"].as_str().unwrap();
+    assert!(text.contains(&work.display().to_string()) && text.contains("find_files"), "{text}");
+    assert!(!text.contains("never replaces"), "{text}");
+    m.ok("drawing_create", plan());
+    assert_eq!(names(&work), ["plan.dxf"]);
+    // Anywhere, in place: an explicit path outside the folder, then a save without a path.
+    let other = elsewhere.join("other.dxf");
+    m.ok("open", json!({"path": "plan.dxf"}));
+    m.ok("save", json!({"path": other.to_str().unwrap()}));
+    m.ok("open", json!({"path": other.to_str().unwrap()}));
+    m.ok("command_line", json!({"text": "circle 0,0 1"}));
+    let saved = m.ok("save", json!({}));
+    assert_eq!(Path::new(saved["path"].as_str().unwrap()), other, "{saved}");
+    let found = m.ok("find_files", json!({"name": "other", "folder": base.to_str().unwrap()}));
+    assert!(found["files"].as_array().unwrap().iter().any(|f| Path::new(f["path"].as_str().unwrap()) == other), "{found}");
+    assert!(m.call("file_attach", json!({"path": other.to_str().unwrap()}))["isError"] != json!(true));
+    drop(m);
     let _ = std::fs::remove_dir_all(base);
 }

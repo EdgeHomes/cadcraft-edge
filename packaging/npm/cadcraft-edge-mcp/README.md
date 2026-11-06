@@ -3,7 +3,8 @@
 CADCraft's native Rust CAD engine as a stdio MCP server. The small Node launcher picks the
 prebuilt `cadcraft-cli` from its platform optional dependency (`cadcraft-edge-mcp-<os>-<cpu>`, or
 `$CADCRAFT_CLI`) and runs `cadcraft-cli mcp`, adding `--root $CADCRAFT_ROOT` (else the working
-directory) unless you pass `--root DIR` or `--root=DIR` yourself. Stdio, signals and the exit code
+directory) unless you pass `--root DIR` or `--root=DIR` yourself, and always `--confine` (unless you pass
+`--read-anywhere`), so a shared server never runs unconfined. Stdio, signals and the exit code
 pass straight through. All drawing work, the protocol and file confinement run in Rust.
 
 Platforms: macOS arm64, Linux x64 and Linux arm64. The Linux binaries are static musl builds, so

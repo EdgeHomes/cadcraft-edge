@@ -64,13 +64,19 @@ point, an unknown command) returns a result with `isError: true` and the message
 ## Chat deployments: `--root`, `--compact` and `tools`
 
 ```sh
-cadcraft-cli mcp --compact --root /app/uploads/cadcraft   # LibreChat (npm: cadcraft-edge-mcp)
-cadcraft-cli mcp --create-root --root ~/Documents/CADCraft   # Claude Desktop (packaging/mcpb)
+cadcraft-cli mcp --root ~/Documents/CADCraft   # ChatGPT Desktop (packaging/chatgpt): unrestricted
+cadcraft-cli mcp --compact --confine --root /app/uploads/cadcraft   # LibreChat (npm: cadcraft-edge-mcp)
+cadcraft-cli mcp --create-root --read-anywhere --root ~/Documents/CADCraft   # Claude Desktop (packaging/mcpb)
 cadcraft-cli tools [--compact] [--json]   # the tool list and instructions, for checking a deployment
 ```
 
-- `--root DIR` (or `--root=DIR`) confines every file any tool reads or writes to `DIR`, which must
-  exist (`--create-root` makes it; it must then be absolute). Relative paths are inside it;
+- `--root DIR` (or `--root=DIR`) alone names the working folder and restricts nothing: the server
+  starts in it, so relative paths and new drawings go there, `~` is the home folder (`HOME`, else
+  `USERPROFILE`), and a missing folder is made. Files anywhere else are opened and saved as without
+  `--root`, and `find_files` searches the usual folders.
+- `--confine` (with `--root`) confines every file any tool reads or writes to `DIR`, which must
+  exist (`--create-root` makes it; it must then be absolute). The npm launcher always adds it
+  unless `--read-anywhere` is given: a shared server must never run unconfined. Relative paths are inside it;
   absolute paths inside it are accepted; `..` and links that lead out are refused, and so are
   Windows device names. It covers every path: the file tools, `execute` and `command_line`
   (OPEN, SAVEAS, WBLOCK, INSERT from a file, IMPORT, XATTACH, IMAGEATTACH, SCRIPT, plot and export,
@@ -79,14 +85,15 @@ cadcraft-cli tools [--compact] [--json]   # the tool list and instructions, for 
   enforce it for the whole process, and a test keeps commands from touching the file system any
   other way. The settings folder (plotter configurations) is turned off. `--root` can't be combined
   with `--connect`: a running app's files can't be confined.
-- Under `--root` nothing is replaced: every write stages the bytes beside the target and publishes
+- Under `--confine` or `--read-anywhere` nothing is replaced: every write stages the bytes beside the target and publishes
   them with a hard link, which fails if the name is taken (the folder's file system must support
   hard links). `save` without a path writes an unused name beside the opened drawing
   (`plan (2).dxf`); no `.bak` is written.
-- `--read-anywhere` (with `--root`; the Claude Desktop bundle) lets tools read files anywhere,
-  while writes stay in the root, new-only. A save without a path of a drawing opened from outside
-  the root, or from bytes, lands in the root under its name. It adds the `find_files {name,
-  folder?, limit?}` tool to the full list (never to `--compact`, not even through `tool_call`):
+- `--read-anywhere` (with `--root`; the Claude Desktop bundle) confines writes like `--confine`
+  but lets tools read files anywhere. A save without a path of a drawing opened from outside
+  the root, or from bytes, lands in the root under its name. `find_files {name, folder?, limit?}`
+  is in the full list (never in `--compact`, not even through `tool_call`); it searches beyond the
+  working folder only when reads aren't confined:
   files whose name contains `name`, newest first, searched in the working folder, Desktop,
   Downloads, Documents and home (hidden, `Library`, `AppData` and `node_modules` folders skipped;
   200,000 entries, depth 12 and 10 s at most; links not followed). `open {data, name}` opens a file

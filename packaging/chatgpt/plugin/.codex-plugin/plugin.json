@@ -1,0 +1,41 @@
+{
+  "name": "cadcraft",
+  "version": "0.0.0",
+  "description": "Create, open and edit DXF/DWG CAD drawings with CADCraft, an open-source CAD engine that runs on this computer.",
+  "author": {
+    "name": "CADCraft",
+    "url": "https://github.com/mbarker-edgehomes/cadcraft-edge"
+  },
+  "homepage": "https://github.com/mbarker-edgehomes/cadcraft-edge",
+  "repository": "https://github.com/mbarker-edgehomes/cadcraft-edge",
+  "license": "MIT OR Apache-2.0",
+  "keywords": [
+    "cad",
+    "dxf",
+    "dwg",
+    "drawing",
+    "floor plan",
+    "drafting"
+  ],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "CADCraft",
+    "shortDescription": "Make and edit CAD drawings",
+    "longDescription": "CADCraft creates and edits DXF and DWG drawings on this computer: floor plans, site plans, parts and details with layers, dimensions, text, hatches and blocks. It opens drawings from anywhere on the computer, finds a drawing you drop into the chat by name, saves new drawings in Documents/CADCraft, and renders a picture to check the result.",
+    "developerName": "CADCraft",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/mbarker-edgehomes/cadcraft-edge",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/icon.png",
+    "defaultPrompt": [
+      "Draw a 10 by 6 metre two-room floor plan with dimensions",
+      "Open my drawing and list its layers",
+      "Add a title block to this drawing"
+    ],
+    "brandColor": "#1F6FEB"
+  }
+}

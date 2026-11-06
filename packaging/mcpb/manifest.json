@@ -97,7 +97,7 @@
     },
     {
       "name": "open",
-      "description": "Open a DXF or DWG drawing with CADCraft. When the user attaches a drawing, its absolute path is provided in context: open that exact path, inspect and edit what was asked, save under a new name, then call file_attach so the user can download it. If it isn't on this computer's disk (a drawing dropped into a Claude Desktop chat), find it with find_files when that tool is offered; a small file you can't reach by path can be sent as `data` (base64) with its `name`. Never write Python or other code to create, read or edit a drawing. The reply lists `warnings`: what reading left out; tell the user about them."
+      "description": "Open a DXF or DWG drawing with CADCraft. When the user attaches a drawing, its absolute path is provided in context: open that exact path, inspect and edit what was asked, save under a new name, then call file_attach so the user can download it. If it isn't on this computer's disk (a drawing dropped into a desktop app's chat), find it with find_files when that tool is offered; a small file you can't reach by path can be sent as `data` (base64) with its `name`. Never write Python or other code to create, read or edit a drawing. The reply lists `warnings`: what reading left out; tell the user about them."
     },
     {
       "name": "find_files",

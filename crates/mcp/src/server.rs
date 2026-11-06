@@ -30,6 +30,10 @@ y up. Fastest path: command_line with AutoCAD syntax, e.g. `line 0,0 10,0 10,5 c
 `rectang 0,0 4,3`, `offset 1` then pick, `zoom e`. Or execute with JSON (list_commands shows ids and params). \
 Verify with inspect_drawing / query_entities and look with render.";
 
+/// What to do with a file dropped into a chat that keeps it off this computer's disk.
+const DROPPED: &str = " A file dropped into the chat is not on this computer's disk: call find_files with its name and open the path found; \
+if it can't be found and is small, send it to open as `data` (base64) with its `name`.";
+
 pub struct Server {
     backend: Box<dyn Backend>,
     initialized: bool,
@@ -37,6 +41,8 @@ pub struct Server {
     compact: bool,
     /// `--root`: the working folder every tool call is confined to.
     root: Option<Arc<Root>>,
+    /// `--root` without confinement: where relative paths and new drawings go.
+    folder: Option<std::path::PathBuf>,
 }
 
 fn response(id: Value, result: Value) -> Value {
@@ -48,7 +54,7 @@ fn error(id: Value, code: i64, message: impl Into<String>) -> Value {
 
 impl Server {
     pub fn new(backend: Box<dyn Backend>) -> Self {
-        Self { backend, initialized: false, compact: false, root: None }
+        Self { backend, initialized: false, compact: false, root: None, folder: None }
     }
     /// Offer the compact tool list ([`compact`]).
     pub fn with_compact(mut self, compact: bool) -> Self {
@@ -59,6 +65,11 @@ impl Server {
     /// process and makes the root the working directory).
     pub fn with_root(mut self, root: Option<Arc<Root>>) -> Self {
         self.root = root;
+        self
+    }
+    /// Name the unconfined working folder in the instructions.
+    pub fn with_folder(mut self, folder: Option<std::path::PathBuf>) -> Self {
+        self.folder = folder;
         self
     }
     /// The tools `tools/list` offers.
@@ -72,8 +83,7 @@ impl Server {
             if root.reads_anywhere() && !self.compact {
                 s.push_str(&format!(
                     " Drawings can be opened from anywhere on this computer; everything is saved in the working folder {} (relative paths are \
-inside it) and saving never replaces a file there. A file dropped into the chat is not on this computer's disk: call find_files with \
-its name and open the path found; if it can't be found and is small, send it to open as `data` (base64) with its `name`.",
+inside it) and saving never replaces a file there.{DROPPED}",
                     root.path().display()
                 ));
             } else {
@@ -81,6 +91,15 @@ its name and open the path found; if it can't be found and is small, send it to 
                     " Files are confined to the working folder {}: relative paths are inside it, and saving never replaces a file there.",
                     root.path().display()
                 ));
+            }
+        }
+        if let (None, Some(folder)) = (&self.root, &self.folder) {
+            s.push_str(&format!(
+                " Relative paths and new drawings are in the working folder {}; files anywhere else can be opened and saved too.",
+                folder.display()
+            ));
+            if !self.compact {
+                s.push_str(DROPPED);
             }
         }
         if self.compact {

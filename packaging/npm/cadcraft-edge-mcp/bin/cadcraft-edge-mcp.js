@@ -62,11 +62,13 @@ function binary() {
 }
 
 // Confine the agent's files to CADCRAFT_ROOT, else the working directory, unless the caller passed
-// a root of its own (`--root DIR` or `--root=DIR`).
+// a root of its own (`--root DIR` or `--root=DIR`). A shared server is always confined: `--root`
+// alone is unrestricted, so `--confine` is added unless `--read-anywhere` already confines writes.
 const args = process.argv.slice(2);
 if (!args.some((a) => /^--root(=|$)/.test(a))) {
   args.push('--root', process.env.CADCRAFT_ROOT || process.cwd());
 }
+if (!args.includes('--confine') && !args.includes('--read-anywhere')) args.push('--confine');
 
 const child = spawn(binary(), ['mcp', ...args], { stdio: 'inherit' });
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => child.kill(sig));

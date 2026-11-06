@@ -13,7 +13,15 @@ pub(crate) fn mcp(a: &McpArgs) -> Result {
         },
         McpTarget::Headless => Box::new(cadcraft_mcp::Headless::default()),
     };
-    let root = match &a.root {
+    let dir = a.root.as_deref().map(home_relative);
+    let root = match &dir {
+        // Unrestricted: the working folder is only where relative paths and new drawings go.
+        Some(dir) if !a.confine && !a.read_anywhere => {
+            std::fs::create_dir_all(dir).map_err(|e| CliError::Root(format!("--root {}: the folder could not be made: {e}", dir.display())))?;
+            std::env::set_current_dir(dir).map_err(|e| CliError::Root(format!("--root {}: {e}", dir.display())))?;
+            eprintln!("cadcraft-cli: working folder {}; files elsewhere are reachable too", dir.display());
+            None
+        }
         // clap refuses --root with --connect: a running app's file access can't be confined.
         Some(dir) => {
             if a.create_root {
@@ -37,8 +45,23 @@ pub(crate) fn mcp(a: &McpArgs) -> Result {
     };
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
-    cadcraft_mcp::Server::new(backend).with_compact(a.compact).with_root(root).serve(stdin.lock(), stdout.lock())?;
+    let folder = dir.filter(|_| root.is_none());
+    cadcraft_mcp::Server::new(backend).with_compact(a.compact).with_root(root).with_folder(folder).serve(stdin.lock(), stdout.lock())?;
     Ok(())
+}
+
+/// `~`, `~/x` and `~\x` are in the home folder (`HOME`, else `USERPROFILE` on Windows), so a
+/// plugin can name `~/Documents/CADCraft` on every system.
+fn home_relative(dir: &std::path::Path) -> std::path::PathBuf {
+    let s = dir.to_string_lossy();
+    let rest = match s.strip_prefix('~') {
+        Some(r) if r.is_empty() || r.starts_with('/') || r.starts_with('\\') => r.trim_start_matches(['/', '\\']),
+        _ => return dir.to_path_buf(),
+    };
+    match std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
+        Some(home) if !home.is_empty() => std::path::PathBuf::from(home).join(rest),
+        _ => dir.to_path_buf(),
+    }
 }
 
 /// `tools [--compact] [--json]`: the MCP tools the server offers, for checking a deployment.

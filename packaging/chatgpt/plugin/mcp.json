@@ -1,0 +1,11 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "cadcraft": {
+      "type": "stdio",
+      "command": "./server/cadcraft-cli",
+      "args": ["mcp", "--root", "~/Documents/CADCraft"],
+      "cwd": "${PLUGIN_ROOT}"
+    }
+  }
+}
