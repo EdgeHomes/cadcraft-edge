@@ -456,7 +456,8 @@ fn the_mcpb_manifest_matches_the_tool_list() {
     // The bundle may be versioned on its own (MCPB_VERSION), but as a semantic version.
     let v = manifest["version"].as_str().unwrap();
     assert_eq!(v.split('.').filter(|p| p.parse::<u32>().is_ok()).count(), 3, "{v}");
-    assert!(manifest["server"]["mcp_config"]["args"].to_string().contains("--read-anywhere"));
+    // Unrestricted, like the ChatGPT plugin: --root only names the working folder.
+    assert_eq!(manifest["server"]["mcp_config"]["args"], json!(["mcp", "--root", "${user_config.working_folder}"]));
 }
 
 #[test]

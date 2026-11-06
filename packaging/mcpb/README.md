@@ -13,30 +13,21 @@ It offers every tool (no `--compact`): `drawing_create`, `open`, `find_files`, `
    Extension…** and choose it.
 3. Choose the **Working folder** when asked. The default is `Documents/CADCraft` in your home
    folder. Click **Install**, then make sure the extension is enabled.
-4. In a chat, ask for a drawing ("draw a 10 × 6 m two-room floor plan with dimensions") or attach
-   a DXF/DWG file that is in the working folder and ask for an edit.
+4. In a chat, ask for a drawing ("draw a 10 × 6 m two-room floor plan with dimensions") or name
+   or drop a DXF/DWG file and ask for an edit.
 
 ## The working folder
 
-The server is always started as `cadcraft-cli mcp --create-root --read-anywhere --root <working folder>`.
+The server is started as `cadcraft-cli mcp --root <working folder>` (unrestricted, like the
+ChatGPT plugin).
 
-- **Reading:** drawings can be opened from anywhere on the computer (`--read-anywhere`). Claude
-  Desktop doesn't put a file dropped into the chat on your disk (it goes to the chat's own
-  sandbox), so the model looks the original up by name with `find_files` (working folder, Desktop,
-  Downloads, Documents, then the home folder, newest first) and opens that path. A small file it
-  can't find (up to 2 MiB) can be sent as bytes: `open {data, name}`.
-- **Writing:** every file a tool writes must be inside the working folder (links are followed,
-  `..` is resolved, and on Windows device names such as `CON` and `NUL` are refused). Relative
-  paths are inside it. A drawing opened from elsewhere is saved into the working folder under its
-  own name (an unused one: `plan (2).dxf` if `plan.dxf` is there).
-- Nothing in it is ever replaced. A save writes a new file (`plan (2).dxf` beside `plan.dxf`), so
-  the original you gave stays as it was. Files are published with hard links, so the folder must
-  be on a file system that supports them (APFS, HFS+, NTFS and ext4 all do; FAT32/exFAT drives
-  don't).
-- If the folder doesn't exist, it's created on first start (`--create-root`). The value must be an
-  absolute path; Claude Desktop's folder picker and the `${DOCUMENTS}/CADCraft` default both give
-  one. An empty or relative value makes the server stop with an error instead of running
-  unconfined.
+- New drawings and relative paths go to the working folder (default `Documents/CADCraft`), which
+  is made on first start.
+- Nothing else is restricted: drawings anywhere on the computer can be opened and saved. Claude
+  Desktop doesn't put a file dropped into the chat on your disk (it goes to the chat's sandbox),
+  so the model finds the original by name with `find_files` (working folder, Desktop, Downloads,
+  Documents, then the home folder, newest first). A small file it can't find (up to 2 MiB) can be
+  sent as bytes: `open {data, name}`.
 
 ## Files in the bundle
 

@@ -1,5 +1,17 @@
 # Claude Desktop bundle (.mcpb) verification
 
+## 0.17.2 (2026-11-06): unrestricted, matching the ChatGPT plugin
+
+`MCPB_VERSION=0.17.2 packaging/mcpb/build.sh` → `dist/cadcraft-0.17.2.mcpb`, **42.7 MB**
+(42,700,946 bytes; SHA-256 `3ffa7d725dad79757255c0207f50e7f79c4532c7b0c20d9acf802396f6eee52c`).
+`mcpb validate` passes; 15 tools; args `mcp --root ${user_config.working_folder}` (no
+confinement). Same binaries as `dist/cadcraft-chatgpt-0.17.2.zip`.
+
+Checked on the binary **unpacked from the bundle** (macOS arm64), started as Claude Desktop starts
+it with the default folder substituted: the folder was made, `drawing_create` wrote there, a
+drawing in `Downloads` was found with `find_files`, opened, edited, saved beside it, attached and
+rendered. Not run in Claude Desktop by me, nor on Windows or the x86_64 slice.
+
 ## 0.17.1 (2026-11-05): read from anywhere
 
 Installed in Claude Desktop, 0.17.0 couldn't open a drawing dropped into the chat: Claude Desktop

@@ -64,9 +64,8 @@ point, an unknown command) returns a result with `isError: true` and the message
 ## Chat deployments: `--root`, `--compact` and `tools`
 
 ```sh
-cadcraft-cli mcp --root ~/Documents/CADCraft   # ChatGPT Desktop (packaging/chatgpt): unrestricted
+cadcraft-cli mcp --root ~/Documents/CADCraft   # ChatGPT and Claude Desktop (packaging/chatgpt, packaging/mcpb): unrestricted
 cadcraft-cli mcp --compact --confine --root /app/uploads/cadcraft   # LibreChat (npm: cadcraft-edge-mcp)
-cadcraft-cli mcp --create-root --read-anywhere --root ~/Documents/CADCraft   # Claude Desktop (packaging/mcpb)
 cadcraft-cli tools [--compact] [--json]   # the tool list and instructions, for checking a deployment
 ```
 
@@ -89,7 +88,7 @@ cadcraft-cli tools [--compact] [--json]   # the tool list and instructions, for 
   them with a hard link, which fails if the name is taken (the folder's file system must support
   hard links). `save` without a path writes an unused name beside the opened drawing
   (`plan (2).dxf`); no `.bak` is written.
-- `--read-anywhere` (with `--root`; the Claude Desktop bundle) confines writes like `--confine`
+- `--read-anywhere` (with `--root`) confines writes like `--confine`
   but lets tools read files anywhere. A save without a path of a drawing opened from outside
   the root, or from bytes, lands in the root under its name. `find_files {name, folder?, limit?}`
   is in the full list (never in `--compact`, not even through `tool_call`); it searches beyond the
