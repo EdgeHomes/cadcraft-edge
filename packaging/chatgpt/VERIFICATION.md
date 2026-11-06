@@ -1,5 +1,15 @@
 # ChatGPT plugin verification
 
+## 0.17.3 (2026-11-06)
+
+`PLUGIN_VERSION=0.17.3 packaging/chatgpt/build.sh` → `dist/cadcraft-chatgpt-0.17.3.zip`, **42.0 MB**
+(41,997,138 bytes; SHA-256 `abb0faaa10ab2808fe39147fe01847b402a4efb3a2636e6392a459a0cb77aedd`).
+New: on Windows `~/Documents` is the folder Windows reports
+(`[Environment]::GetFolderPath('MyDocuments')` through PowerShell), so a Documents folder moved
+by OneDrive is used. That code passes `cargo xwin clippy -D warnings` for
+`x86_64-pc-windows-msvc` but has **not been run on Windows**. The unpacked zip passed the same
+workflow as 0.17.2 on this Mac.
+
 ## 0.17.2 (2026-11-06)
 
 `PLUGIN_VERSION=0.17.2 packaging/chatgpt/build.sh` → `dist/cadcraft-chatgpt-0.17.2.zip`, **42.0 MB**

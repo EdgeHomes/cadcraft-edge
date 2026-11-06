@@ -1,5 +1,16 @@
 # Claude Desktop bundle (.mcpb) verification
 
+## 0.17.3 (2026-11-06): nothing to fill in
+
+`MCPB_VERSION=0.17.3 packaging/mcpb/build.sh` → `dist/cadcraft-0.17.3.mcpb`, **42.7 MB**
+(42,701,372 bytes; SHA-256 `95383d2d45c20a837d495b1192ddc1d6cd0d43fb46a5f611e9e22fdca29c03b9`).
+No `user_config`: args `mcp --root ${DOCUMENTS}/CADCraft`. `@anthropic-ai/mcpb` 2.1.2's
+`getMcpConfigForManifest` substitutes the system folders (`HOME`, `DESKTOP`, `DOCUMENTS`,
+`DOWNLOADS`) in `mcp_config`, so Claude Desktop supplies the real Documents folder. Binaries
+identical to `dist/cadcraft-chatgpt-0.17.3.zip` (`cmp`). The unpacked binary passed the same
+workflow as 0.17.2 with `${DOCUMENTS}` substituted by hand. Not run in Claude Desktop, on Windows
+or on the x86_64 slice.
+
 ## 0.17.2 (2026-11-06): unrestricted, matching the ChatGPT plugin
 
 `MCPB_VERSION=0.17.2 packaging/mcpb/build.sh` → `dist/cadcraft-0.17.2.mcpb`, **42.7 MB**

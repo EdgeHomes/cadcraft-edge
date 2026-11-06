@@ -58,10 +58,41 @@ fn home_relative(dir: &std::path::Path) -> std::path::PathBuf {
         Some(r) if r.is_empty() || r.starts_with('/') || r.starts_with('\\') => r.trim_start_matches(['/', '\\']),
         _ => return dir.to_path_buf(),
     };
+    // Windows may keep Documents elsewhere (OneDrive): `~/Documents` is the real one.
+    #[cfg(windows)]
+    if let Ok(sub) = std::path::Path::new(rest).strip_prefix("Documents")
+        && let Some(docs) = windows_documents()
+    {
+        return docs.join(sub);
+    }
     match std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
         Some(home) if !home.is_empty() => std::path::PathBuf::from(home).join(rest),
         _ => dir.to_path_buf(),
     }
+}
+
+/// The user's Documents folder as Windows knows it (moved by OneDrive or policy), asked of
+/// PowerShell so no unsafe system call is needed.
+// ponytail: one PowerShell start (~0.3 s) at server start; a known-folder crate if that matters.
+#[cfg(windows)]
+fn windows_documents() -> Option<std::path::PathBuf> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let out = std::process::Command::new("powershell.exe")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "[Console]::OutputEncoding=[Text.Encoding]::UTF8; [Environment]::GetFolderPath('MyDocuments')",
+        ])
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .ok()?;
+    let path = String::from_utf8(out.stdout).ok()?;
+    let path = path.trim();
+    (out.status.success() && std::path::Path::new(path).is_absolute()).then(|| std::path::PathBuf::from(path))
 }
 
 /// `tools [--compact] [--json]`: the MCP tools the server offers, for checking a deployment.

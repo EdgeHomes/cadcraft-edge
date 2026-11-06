@@ -15,8 +15,9 @@ desktop-only plugin (a local server), so it is used from the ChatGPT desktop app
 
 The server starts as `cadcraft-cli mcp --root ~/Documents/CADCraft`:
 
-- New drawings and relative paths go to `Documents/CADCraft` in your home folder, which is made on
-  first start.
+- New drawings and relative paths go to `Documents/CADCraft`, which is made on first start. On
+  Windows `~/Documents` is the Documents folder Windows reports (OneDrive included), asked of
+  PowerShell at start.
 - Nothing else is restricted: drawings anywhere on the computer can be opened and saved. A file
   dropped into a chat isn't on this computer's disk, so the model finds the original by name with
   `find_files`; a small one it can't find (up to 2 MiB) can be sent as bytes.

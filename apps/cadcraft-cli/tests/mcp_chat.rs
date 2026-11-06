@@ -456,8 +456,10 @@ fn the_mcpb_manifest_matches_the_tool_list() {
     // The bundle may be versioned on its own (MCPB_VERSION), but as a semantic version.
     let v = manifest["version"].as_str().unwrap();
     assert_eq!(v.split('.').filter(|p| p.parse::<u32>().is_ok()).count(), 3, "{v}");
-    // Unrestricted, like the ChatGPT plugin: --root only names the working folder.
-    assert_eq!(manifest["server"]["mcp_config"]["args"], json!(["mcp", "--root", "${user_config.working_folder}"]));
+    // Unrestricted, like the ChatGPT plugin, and nothing to fill in: Claude Desktop puts the real
+    // Documents folder (OneDrive included) in ${DOCUMENTS}.
+    assert!(manifest.get("user_config").is_none());
+    assert_eq!(manifest["server"]["mcp_config"]["args"], json!(["mcp", "--root", "${DOCUMENTS}/CADCraft"]));
 }
 
 #[test]

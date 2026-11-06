@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "cadcraft",
   "display_name": "CADCraft",
-  "version": "0.17.2",
+  "version": "0.17.3",
   "description": "Make and edit CAD drawings (DXF, DWG) with CADCraft, an open-source CAD engine, in a folder you choose.",
   "long_description": "CADCraft makes new drawings from a description (layers, lines, polylines, circles, arcs, text, dimensions, hatches, blocks) and opens, inspects, edits, renders and saves DXF and DWG drawings with AutoCAD-style commands. It opens drawings from anywhere on this computer (and finds a file you drop into the chat by its name), but every file it writes goes into the working folder you choose, and it never replaces a file there: edits are saved under new names.",
   "author": {
@@ -31,7 +31,7 @@
       "args": [
         "mcp",
         "--root",
-        "${user_config.working_folder}"
+        "${DOCUMENTS}/CADCraft"
       ],
       "env": {},
       "platform_overrides": {
@@ -39,15 +39,6 @@
           "command": "${__dirname}/server/cadcraft-cli.exe"
         }
       }
-    }
-  },
-  "user_config": {
-    "working_folder": {
-      "type": "directory",
-      "title": "Working folder",
-      "description": "The folder new drawings are saved to. CADCraft can open and save drawings anywhere on this computer. Made on first use if it doesn't exist.",
-      "required": true,
-      "default": "${DOCUMENTS}/CADCraft"
     }
   },
   "compatibility": {

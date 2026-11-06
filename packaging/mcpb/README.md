@@ -11,18 +11,17 @@ It offers every tool (no `--compact`): `drawing_create`, `open`, `find_files`, `
 1. Open Claude Desktop, then **Settings → Extensions** (or double-click the `.mcpb` file).
 2. Drag `cadcraft-<version>.mcpb` onto the window, or use **Advanced settings → Install
    Extension…** and choose it.
-3. Choose the **Working folder** when asked. The default is `Documents/CADCraft` in your home
-   folder. Click **Install**, then make sure the extension is enabled.
+3. Click **Install**, then make sure the extension is enabled. There is nothing to fill in.
 4. In a chat, ask for a drawing ("draw a 10 × 6 m two-room floor plan with dimensions") or name
    or drop a DXF/DWG file and ask for an edit.
 
 ## The working folder
 
-The server is started as `cadcraft-cli mcp --root <working folder>` (unrestricted, like the
-ChatGPT plugin).
+The server is started as `cadcraft-cli mcp --root ${DOCUMENTS}/CADCraft` (unrestricted, like the
+ChatGPT plugin). Claude Desktop fills in the real Documents folder, also when OneDrive or a
+policy has moved it.
 
-- New drawings and relative paths go to the working folder (default `Documents/CADCraft`), which
-  is made on first start.
+- New drawings and relative paths go to `Documents/CADCraft`, which is made on first start.
 - Nothing else is restricted: drawings anywhere on the computer can be opened and saved. Claude
   Desktop doesn't put a file dropped into the chat on your disk (it goes to the chat's sandbox),
   so the model finds the original by name with `find_files` (working folder, Desktop, Downloads,
@@ -33,7 +32,7 @@ ChatGPT plugin).
 
 | Path | What |
 |---|---|
-| `manifest.json` | MCPB manifest 0.3: binary server, `platform_overrides` for Windows, `user_config.working_folder`, the full tool list |
+| `manifest.json` | MCPB manifest 0.3: binary server, `platform_overrides` for Windows, the full tool list |
 | `server/cadcraft-cli` | macOS universal binary (arm64 + x86_64) |
 | `server/cadcraft-cli.exe` | Windows x86_64 binary (also runs on Windows on Arm, emulated) |
 | `icon.png` | CADCraft's own app icon, 512 × 512 (`assets/app-icon/cadcraft-macos-512.png`) |
