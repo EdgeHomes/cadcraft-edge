@@ -1,5 +1,12 @@
 # ChatGPT plugin verification
 
+## 0.18.0 (2026-11-06)
+
+`packaging/chatgpt/build.sh` → `dist/cadcraft-chatgpt-0.18.0.zip`, **42.2 MB** (42,212,817 bytes;
+SHA-256 `38d9950b9d5bf2fe64a17cc34739de96d93c386c284d6083fbcb94135ce7944d`). Binaries report
+0.18.0 and are identical to the 0.18.0 bundle's. The unpacked zip passed the same workflow as
+0.17.3. Not uploaded to ChatGPT; not run on Windows.
+
 ## 0.17.3 (2026-11-06)
 
 `PLUGIN_VERSION=0.17.3 packaging/chatgpt/build.sh` → `dist/cadcraft-chatgpt-0.17.3.zip`, **42.0 MB**

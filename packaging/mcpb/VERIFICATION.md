@@ -1,5 +1,15 @@
 # Claude Desktop bundle (.mcpb) verification
 
+## 0.18.0 (2026-11-06)
+
+Workspace version 0.18.0 (the binaries report `cadcraft-cli 0.18.0`), built from main at
+`55565686` plus the version bump. `packaging/mcpb/build.sh` → `dist/cadcraft-0.18.0.mcpb`,
+**42.9 MB** (42,918,021 bytes; SHA-256
+`6e728fc7fcc183cb76de3f2f91bcda57fff3eb6628b17f2b0c7520cae9e76ce6`). 15 tools, no `user_config`,
+args `mcp --root ${DOCUMENTS}/CADCraft`; binaries identical to the 0.18.0 ChatGPT zip. The
+unpacked binary passed the same workflow as 0.17.3. Not run in Claude Desktop, on Windows or on
+the x86_64 slice.
+
 ## 0.17.3 (2026-11-06): nothing to fill in
 
 `MCPB_VERSION=0.17.3 packaging/mcpb/build.sh` → `dist/cadcraft-0.17.3.mcpb`, **42.7 MB**
